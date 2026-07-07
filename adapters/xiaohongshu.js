@@ -11,24 +11,50 @@ function compact(value) {
 }
 
 function extractXiaohongshuNoteId(sourceUrl) {
-  const raw = String(sourceUrl || '');
+  const raw = String(sourceUrl || '').trim();
+  const notePattern = /\/(?:explore|note|search_result|discovery\/item)\/([a-f0-9]+)|\/user\/profile\/[^/?#]+\/([a-f0-9]+)/i;
 
   try {
     const parsed = new URL(raw);
     const queryId = parsed.searchParams.get('note_id') || parsed.searchParams.get('noteId');
     if (queryId) return queryId;
 
-    const match = parsed.pathname.match(/\/(?:explore|discovery\/item)\/([^/?#]+)/);
-    return match ? match[1] : '';
+    const match = parsed.pathname.match(notePattern);
+    return match ? (match[1] || match[2]) : '';
   } catch (_error) {
-    const match = raw.match(/\/(?:explore|discovery\/item)\/([^/?#]+)/);
-    return match ? match[1] : '';
+    const match = raw.match(notePattern);
+    if (match) return match[1] || match[2];
+    return /^[a-f0-9]+$/i.test(raw) ? raw : '';
   }
 }
 
-function parseLikeCount(text) {
-  const match = normalizeSpaces(text).match(/(?:点赞|赞)\s*(\d+)$/);
-  return match ? Number(match[1]) : 0;
+function parseXiaohongshuLikeCountText(value) {
+  const integerRe = /^(?:\d+|\d{1,3}(?:[,，]\d{3})+)\+?$/u;
+  const shortformRe = /^((?:\d+|\d{1,3}(?:[,，]\d{3})+)(?:\.\d+)?)([wWkK万千])\+?$/u;
+  const raw = String(value ?? '').replace(/\s+/g, '');
+
+  if (!raw) return 0;
+  if (integerRe.test(raw)) return Number(raw.replace(/[,+，]/g, ''));
+
+  const short = raw.match(shortformRe);
+  if (!short) return 0;
+
+  const numeric = Number(short[1].replace(/[,，]/g, ''));
+  if (!Number.isFinite(numeric)) return 0;
+
+  const unit = short[2].toLowerCase();
+  const multiplier = unit === 'w' || unit === '万' ? 10000 : 1000;
+  return Math.round(numeric * multiplier);
+}
+
+function parseLikeCount(raw) {
+  if (raw && raw.likes != null) {
+    if (typeof raw.likes === 'number' && Number.isFinite(raw.likes)) return raw.likes;
+    return parseXiaohongshuLikeCountText(raw.likes);
+  }
+
+  const match = normalizeSpaces(raw && raw.text).match(/(?:点赞|赞)\s*([\d,.，]+(?:\.\d+)?\s*[wWkK万千]?\+?)$/u);
+  return match ? parseXiaohongshuLikeCountText(match[1]) : 0;
 }
 
 function stripTrailingActions(text) {
@@ -38,7 +64,7 @@ function stripTrailingActions(text) {
   while (current && current !== previous) {
     previous = current;
     current = current
-      .replace(/\s*(?:回复|点赞|赞|收藏|分享|举报|评论)(?:\s*\d+)?\s*$/g, '')
+      .replace(/\s*(?:回复|点赞|赞|收藏|分享|举报|评论)(?:\s*[\d,.，]+(?:\.\d+)?\s*[wWkK万千]?\+?)?\s*$/gu, '')
       .trim();
   }
 
@@ -81,9 +107,12 @@ function buildRowKey(parts) {
 
 function normalizeRow(raw, options) {
   const sourceUrl = options.sourceUrl || '';
-  const rowType = raw.row_type === 'level2' ? 'level2' : 'level1';
+  const rowType = raw.row_type === 'level2' || raw.is_reply === true ? 'level2' : 'level1';
   const originalText = normalizeSpaces(raw.text);
-  const authorAndText = splitAuthorPrefix(originalText);
+  const authorFromCli = normalizeSpaces(raw.author || raw.user_name);
+  const authorAndText = authorFromCli
+    ? { userName: authorFromCli, text: stripXiaohongshuUiText(originalText) }
+    : splitAuthorPrefix(originalText);
   const text = authorAndText.text;
 
   if (!text) return null;
@@ -108,16 +137,16 @@ function normalizeRow(raw, options) {
     parent_comment_id: '',
     user_name: authorAndText.userName,
     text,
-    created_at: normalizeSpaces(raw.captured_at),
-    like_count: parseLikeCount(originalText),
-    reply_to_user_name: '',
-    root_text: rowType === 'level1' ? text : '',
+    created_at: normalizeSpaces(raw.time || raw.captured_at),
+    like_count: parseLikeCount(raw),
+    reply_to_user_name: normalizeSpaces(raw.reply_to || raw.reply_to_user_name),
+    root_text: rowType === 'level1' ? text : normalizeSpaces(raw.root_text),
     raw: Object.assign({}, raw)
   };
 }
 
 function normalizeXiaohongshuPayload(payload, options = {}) {
-  const sourceUrl = options.sourceUrl || payload.source_url || '';
+  const sourceUrl = options.sourceUrl || payload.source_url || payload.pageUrl || payload.page_url || '';
   const seen = new Set();
   const rows = [];
   const results = Array.isArray(payload && payload.results) ? payload.results : [];
@@ -136,6 +165,7 @@ module.exports = {
   normalizeXiaohongshuPayload,
   normalizeRow,
   extractXiaohongshuNoteId,
+  parseXiaohongshuLikeCountText,
   stripXiaohongshuUiText,
   splitAuthorPrefix,
   buildRowKey

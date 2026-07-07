@@ -309,6 +309,8 @@ AI 不参与爬取，只处理归一化后的评论。
 
 小红书已有 `clis/xiaohongshu/comments.js` 的 DOM 抽取思路可参考。扩展时保持同一个输出 schema，不要为小红书单独做一套报表。
 
+第一版 adapter 已对齐 `clis/xiaohongshu/note-helpers.js` 的笔记 URL 形态，并兼容 `clis/xiaohongshu/comments.js` 输出的 `author`、`likes`、`time`、`is_reply`、`reply_to` 字段。
+
 第一版只要求：
 
 - 单笔记评论。
