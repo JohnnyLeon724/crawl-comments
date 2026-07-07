@@ -81,7 +81,7 @@ output/
 | 3 | 已完成 | 增加 `manifest.json` 与运行目录 | 高 | 低 | `output/<run_id>/manifest.json` | 成功、失败、耗时、URL、结果文件路径清楚 |
 | 4 | 已完成 | 建立原始评论标准字段 | 高 | 中 | `schemas/comment-row.schema.json` | 不同平台评论能转成统一 row |
 | 5 | 已完成 | 做抖音 adapter 精修 | 高 | 中 | `adapters/douyin.js` | 减少昵称、按钮、视频文案混入评论 |
-| 6 | 进行中 | 批量 URL、断点续跑、失败重试 | 高 | 中 | 批量 runner 参数 | 中断后可 `--resume`，失败 URL 可重跑 |
+| 6 | 已完成 | 批量 URL、断点续跑、失败重试 | 高 | 中 | 批量 runner 参数 | 中断后可 `--resume`，失败 URL 可重跑 |
 | 7 | 未开始 | 评论清洗、去重、层级归一 | 高 | 中 | `normalized-comments.jsonl` | 一级评论、二级回复、父子关系和去重稳定 |
 | 8 | 未开始 | AI 结构化 POC | 很高 | 中 | AI 输入批次、schema、输出 JSON | 少量评论能稳定输出情感、主题、依据 |
 | 9 | 未开始 | Excel 报表生成 | 高 | 中 | `comment-report.xlsx` | 包含总结、全部评论、负面、正面、AI 明细 |
