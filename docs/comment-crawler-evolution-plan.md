@@ -73,21 +73,21 @@ output/
 
 阶段按执行顺序排序，同时兼顾收益和成本。优先做低成本、高收益、能减少后续返工的部分。
 
-| 阶段 | 任务 | 收益 | 成本 | 交付物 | 验收标准 |
-|---|---|---:|---:|---|---|
-| 0 | 明确合规、频率和数据边界 | 高 | 低 | 抓取规则说明 | 有速率限制、登录态说明、失败处理规则 |
-| 1 | 稳定页面内展开脚本 | 高 | 低 | `expand-comments-v1.js` | 能自动展开、下滚、停止，并暴露 `getPayload()` |
-| 2 | 实现单 URL Playwright Runner | 很高 | 中 | `scripts/crawl-comments-playwright.js` | 输入一个 URL，输出 raw JSON/CSV |
-| 3 | 增加 `manifest.json` 与运行目录 | 高 | 低 | `output/<run_id>/manifest.json` | 成功、失败、耗时、URL、结果文件路径清楚 |
-| 4 | 建立原始评论标准字段 | 高 | 中 | `schemas/comment-row.schema.json` | 不同平台评论能转成统一 row |
-| 5 | 做抖音 adapter 精修 | 高 | 中 | `adapters/douyin.js` | 减少昵称、按钮、视频文案混入评论 |
-| 6 | 批量 URL、断点续跑、失败重试 | 高 | 中 | 批量 runner 参数 | 中断后可 `--resume`，失败 URL 可重跑 |
-| 7 | 评论清洗、去重、层级归一 | 高 | 中 | `normalized-comments.jsonl` | 一级评论、二级回复、父子关系和去重稳定 |
-| 8 | AI 结构化 POC | 很高 | 中 | AI 输入批次、schema、输出 JSON | 少量评论能稳定输出情感、主题、依据 |
-| 9 | Excel 报表生成 | 高 | 中 | `comment-report.xlsx` | 包含总结、全部评论、负面、正面、AI 明细 |
-| 10 | 人工 QA 与 prompt 迭代 | 高 | 低 | QA 样本与误判记录 | 抽样检查误判可定位到 prompt 或清洗问题 |
-| 11 | 扩展小红书 adapter | 中 | 中 | `adapters/xiaohongshu.js` | 复用同一 runner 输出标准 row |
-| 12 | 工程化增强 | 中 | 高 | 配置文件、日志、测试夹具 | 可长期维护，但不阻塞前期收益 |
+| 阶段 | 状态 | 任务 | 收益 | 成本 | 交付物 | 验收标准 |
+|---|---|---|---:|---:|---|---|
+| 0 | 已完成 | 明确合规、频率和数据边界 | 高 | 低 | 抓取规则说明 | 有速率限制、登录态说明、失败处理规则 |
+| 1 | 已完成 | 稳定页面内展开脚本 | 高 | 低 | `script/expand-comments-v1.js` | 能自动展开、下滚、停止，并暴露 `getPayload()` |
+| 2 | 已完成 | 实现单 URL Playwright Runner | 很高 | 中 | `script/crawl-comments-playwright.js` | 输入一个 URL，输出 raw JSON/CSV |
+| 3 | 已完成 | 增加 `manifest.json` 与运行目录 | 高 | 低 | `output/<run_id>/manifest.json` | 成功、失败、耗时、URL、结果文件路径清楚 |
+| 4 | 已完成 | 建立原始评论标准字段 | 高 | 中 | `schemas/comment-row.schema.json` | 不同平台评论能转成统一 row |
+| 5 | 已完成 | 做抖音 adapter 精修 | 高 | 中 | `adapters/douyin.js` | 减少昵称、按钮、视频文案混入评论 |
+| 6 | 进行中 | 批量 URL、断点续跑、失败重试 | 高 | 中 | 批量 runner 参数 | 中断后可 `--resume`，失败 URL 可重跑 |
+| 7 | 未开始 | 评论清洗、去重、层级归一 | 高 | 中 | `normalized-comments.jsonl` | 一级评论、二级回复、父子关系和去重稳定 |
+| 8 | 未开始 | AI 结构化 POC | 很高 | 中 | AI 输入批次、schema、输出 JSON | 少量评论能稳定输出情感、主题、依据 |
+| 9 | 未开始 | Excel 报表生成 | 高 | 中 | `comment-report.xlsx` | 包含总结、全部评论、负面、正面、AI 明细 |
+| 10 | 未开始 | 人工 QA 与 prompt 迭代 | 高 | 低 | QA 样本与误判记录 | 抽样检查误判可定位到 prompt 或清洗问题 |
+| 11 | 未开始 | 扩展小红书 adapter | 中 | 中 | `adapters/xiaohongshu.js` | 复用同一 runner 输出标准 row |
+| 12 | 未开始 | 工程化增强 | 中 | 高 | 配置文件、日志、测试夹具 | 可长期维护，但不阻塞前期收益 |
 
 ## 5. 各阶段说明
 
