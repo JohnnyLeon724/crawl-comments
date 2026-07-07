@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const expander = require('../expand-comments-v1.js');
+const expander = require('../script/expand-comments-v1.js');
 
 class FakeElement {
   constructor(tagName, text = '', options = {}) {
