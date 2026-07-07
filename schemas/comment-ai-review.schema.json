@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.comment-crawler/schemas/comment-ai-review.schema.json",
+  "title": "Comment AI Review Results",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "row_key",
+      "sentiment",
+      "negative_theme",
+      "reason",
+      "confidence"
+    ],
+    "properties": {
+      "row_key": {
+        "type": "string"
+      },
+      "sentiment": {
+        "type": "string",
+        "enum": ["负面", "正面", "中性"]
+      },
+      "negative_theme": {
+        "type": "string",
+        "enum": [
+          "",
+          "产品体验",
+          "质量问题",
+          "售后服务",
+          "价格质疑",
+          "营销反感",
+          "品牌嘲讽",
+          "功能问题",
+          "内容质疑",
+          "其他负面"
+        ]
+      },
+      "reason": {
+        "type": "string"
+      },
+      "confidence": {
+        "type": "string",
+        "enum": ["high", "medium", "low"]
+      }
+    }
+  }
+}
