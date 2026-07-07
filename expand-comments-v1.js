@@ -15,6 +15,9 @@
     minScrollStepPx: 360,
     maxRetryPerButton: 3,
     maxButtonTextLength: 24,
+    minCommentTextLength: 2,
+    maxCommentTextLength: 500,
+    extractComments: true,
     logEveryRound: true
   };
 
@@ -39,6 +42,8 @@
 
   const mergeConfig = config => Object.assign({}, DEFAULT_CONFIG, config || {});
 
+  const nowIso = () => new Date().toISOString();
+
   const normalizeText = value => {
     const raw = typeof value === 'string'
       ? value
@@ -47,6 +52,16 @@
         : '';
 
     return String(raw).replace(/\s+/g, '').trim();
+  };
+
+  const normalizeReadableText = value => {
+    const raw = typeof value === 'string'
+      ? value
+      : value && typeof value.textContent === 'string'
+        ? value.textContent
+        : '';
+
+    return String(raw).replace(/\s+/g, ' ').trim();
   };
 
   const isExpandText = value => {
@@ -117,6 +132,162 @@
   };
 
   const getButtonKey = el => `${getDomPath(el)}::${normalizeText(el)}`;
+
+  const stripCommentUiText = value => {
+    let text = normalizeReadableText(value);
+
+    text = text
+      .replace(/\s*(?:展开更多(?:回复|评论)?|展开(?:全部)?\d+\s*条?回复|展开\d+\s*回复)\s*/g, ' ')
+      .replace(/\s*(?:查看(?:全部|更多)?\d+\s*条?回复|查看(?:全部|更多)?回复|查看更多回复|更多回复)\s*/g, ' ')
+      .replace(/\s*(?:回复|点赞|赞|分享|收藏|举报|评论)(?:\s*\d+)?\s*$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return text;
+  };
+
+  const isActionOnlyText = text => {
+    const compact = normalizeText(text);
+    if (!compact) return true;
+    if (isExpandText(compact)) return true;
+
+    return /^(回复|点赞|赞|分享|收藏|举报|评论|\d+)$/.test(compact);
+  };
+
+  const getElementMarker = el => {
+    if (!el) return '';
+
+    return [
+      el.id || '',
+      el.className || '',
+      el.getAttribute && el.getAttribute('data-e2e') || '',
+      el.getAttribute && el.getAttribute('data-testid') || '',
+      el.getAttribute && el.getAttribute('aria-label') || ''
+    ].join(' ').toLowerCase();
+  };
+
+  const isLikelyCommentElement = (el, userConfig = {}) => {
+    const config = mergeConfig(userConfig);
+    if (!el || el.nodeType !== 1) return false;
+    if (/^(SCRIPT|STYLE|NOSCRIPT|BUTTON|A|SVG|PATH|IMG|VIDEO|CANVAS)$/.test(el.tagName)) return false;
+    if (!isElementVisible(el)) return false;
+
+    const text = stripCommentUiText(el);
+    if (text.length < config.minCommentTextLength || text.length > config.maxCommentTextLength) return false;
+    if (isActionOnlyText(text)) return false;
+
+    const marker = getElementMarker(el);
+    const hasCommentMarker = /comment|reply|评论|回复/.test(marker);
+    const hasReadablePunctuation = /[：:，,。.!！？?]/.test(text);
+
+    return hasCommentMarker || hasReadablePunctuation;
+  };
+
+  const inferRowType = el => {
+    const marker = getElementMarker(el);
+    const text = normalizeReadableText(el);
+
+    if (/reply|回复/.test(marker) || /^↳/.test(text)) {
+      return 'level2';
+    }
+
+    return 'level1';
+  };
+
+  const getCommentKey = text => normalizeText(text).slice(0, 240);
+
+  const extractVisibleComments = (root, userConfig = {}) => {
+    const config = mergeConfig(userConfig);
+    const doc = root && root.body ? root : null;
+    const source = doc || root;
+    const elements = [];
+    const seenElements = new Set();
+
+    const addElement = el => {
+      if (!el || seenElements.has(el)) return;
+      seenElements.add(el);
+      elements.push(el);
+    };
+
+    if (source && typeof source.querySelectorAll === 'function') {
+      const selector = [
+        '[data-e2e*="comment"]',
+        '[data-e2e*="reply"]',
+        '[data-testid*="comment"]',
+        '[data-testid*="reply"]',
+        '[class*="comment"]',
+        '[class*="reply"]',
+        '[class*="Comment"]',
+        '[class*="Reply"]',
+        '[class*="评论"]',
+        '[class*="回复"]',
+        'article',
+        'li',
+        'div',
+        'p',
+        'span'
+      ].join(',');
+
+      try {
+        Array.from(source.querySelectorAll(selector)).forEach(addElement);
+      } catch (_error) {
+        try {
+          Array.from(source.querySelectorAll('*')).forEach(addElement);
+        } catch (_innerError) {
+          // Keep the roots already collected.
+        }
+      }
+    }
+
+    const seenText = new Set();
+    const comments = [];
+
+    for (const el of elements) {
+      if (!isLikelyCommentElement(el, config)) continue;
+
+      const text = stripCommentUiText(el);
+      const key = getCommentKey(text);
+      if (!key || seenText.has(key)) continue;
+      seenText.add(key);
+
+      comments.push({
+        row_type: inferRowType(el),
+        text,
+        dom_path: getDomPath(el),
+        captured_at: nowIso()
+      });
+    }
+
+    return comments;
+  };
+
+  const mergeExtractedComments = (targetMap, comments) => {
+    let added = 0;
+
+    for (const item of comments) {
+      const key = getCommentKey(item.text);
+      if (!key || targetMap.has(key)) continue;
+      targetMap.set(key, item);
+      added += 1;
+    }
+
+    return added;
+  };
+
+  const escapeCsvCell = value => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
+
+  const formatResultsAsCsv = comments => {
+    const columns = ['row_type', 'text', 'dom_path', 'captured_at'];
+    const rows = [columns.join(',')];
+
+    for (const item of comments) {
+      rows.push(columns.map(column => escapeCsvCell(item[column])).join(','));
+    }
+
+    return `\ufeff${rows.join('\n')}`;
+  };
+
+  const formatResultsAsJson = comments => JSON.stringify(comments, null, 2);
 
   const hasMatchingDescendant = el => {
     if (!el || typeof el.querySelectorAll !== 'function') return false;
@@ -363,13 +534,25 @@
   };
 
   const shouldStop = (state, userConfig = {}) => {
+    return getStopReason(state, userConfig) !== '';
+  };
+
+  const getStopReason = (state, userConfig = {}) => {
     const config = mergeConfig(userConfig);
 
+    if (state.idleRounds >= config.maxIdleRounds) return 'idle';
+    if (state.round >= config.maxRounds) return 'max-rounds';
+    if (state.totalClicks >= config.maxClicks) return 'max-clicks';
+    if (state.elapsedMs >= config.maxRuntimeMs) return 'max-runtime';
+
+    return '';
+  };
+
+  const isMeaningfulProgress = info => {
     return (
-      state.idleRounds >= config.maxIdleRounds ||
-      state.round >= config.maxRounds ||
-      state.totalClicks >= config.maxClicks ||
-      state.elapsedMs >= config.maxRuntimeMs
+      info.clickedThisRound > 0 ||
+      info.addedComments > 0 ||
+      Boolean(info.scrollResult && info.scrollResult.changed)
     );
   };
 
@@ -377,11 +560,13 @@
     const config = mergeConfig(userConfig);
     const doc = win.document;
     const attempts = new Map();
+    const resultsByKey = new Map();
     const mutationCounter = createMutationCounter(doc);
     const startedAt = Date.now();
     const state = {
       round: 0,
       totalClicks: 0,
+      totalComments: 0,
       totalErrors: 0,
       idleRounds: 0,
       elapsedMs: 0,
@@ -397,13 +582,56 @@
       state.stopReason = reason || 'manual';
     };
 
+    const captureVisibleComments = () => {
+      if (!config.extractComments) return 0;
+
+      const added = mergeExtractedComments(resultsByKey, extractVisibleComments(doc, config));
+      state.totalComments = resultsByKey.size;
+      return added;
+    };
+
+    const getResults = () => Array.from(resultsByKey.values());
+
+    const getPayload = () => ({
+      state: Object.assign({}, state),
+      config: Object.assign({}, config),
+      results: getResults()
+    });
+
+    const downloadText = (filename, text, type) => {
+      if (typeof win.Blob !== 'function' || !doc.createElement || !doc.body) {
+        throw new Error('当前浏览器环境不支持自动下载，请改用 getPayload() 或 getResults()。');
+      }
+
+      const blob = new win.Blob([text], { type });
+      const url = win.URL.createObjectURL(blob);
+      const link = doc.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.style.display = 'none';
+      doc.body.appendChild(link);
+      link.click();
+      link.remove();
+      win.URL.revokeObjectURL(url);
+    };
+
+    const downloadJson = (filename = `comments-${Date.now()}.json`) => {
+      downloadText(filename, formatResultsAsJson(getResults()), 'application/json;charset=utf-8');
+    };
+
+    const downloadCsv = (filename = `comments-${Date.now()}.csv`) => {
+      downloadText(filename, formatResultsAsCsv(getResults()), 'text/csv;charset=utf-8');
+    };
+
     const start = async () => {
       log('开始展开评论。手动停止：window.__commentExpanderV1.stop()');
+      captureVisibleComments();
 
       while (!state.stopped) {
         state.elapsedMs = Date.now() - startedAt;
-        if (shouldStop(state, config)) {
-          state.stopReason = state.stopReason || 'limit';
+        const stopReason = getStopReason(state, config);
+        if (stopReason) {
+          state.stopReason = state.stopReason || stopReason;
           break;
         }
 
@@ -441,7 +669,13 @@
         await sleep(config.scrollWaitMs);
 
         const mutationDelta = mutationCounter.count - beforeMutationCount;
-        const progressed = clickedThisRound > 0 || mutationDelta > 0 || scrollResult.changed;
+        const addedComments = captureVisibleComments();
+        const progressed = isMeaningfulProgress({
+          clickedThisRound,
+          mutationDelta,
+          scrollResult,
+          addedComments
+        });
 
         state.idleRounds = progressed ? 0 : state.idleRounds + 1;
         state.elapsedMs = Date.now() - startedAt;
@@ -451,6 +685,8 @@
             `轮次 ${state.round}`,
             `本轮点击 ${clickedThisRound}`,
             `总点击 ${state.totalClicks}`,
+            `新增评论 ${addedComments}`,
+            `候选评论 ${state.totalComments}`,
             `DOM变化 ${mutationDelta}`,
             `滚动 ${scrollResult.before}->${scrollResult.after}`,
             `空转 ${state.idleRounds}/${config.maxIdleRounds}`
@@ -463,6 +699,7 @@
       log(
         `结束：${state.stopReason || 'complete'}`,
         `总点击 ${state.totalClicks}`,
+        `候选评论 ${state.totalComments}`,
         `轮次 ${state.round}`,
         `错误 ${state.totalErrors}`,
         `耗时 ${Math.round(state.elapsedMs / 1000)}s`
@@ -475,7 +712,11 @@
       config,
       start,
       stop,
-      getState: () => Object.assign({}, state)
+      getState: () => Object.assign({}, state),
+      getResults,
+      getPayload,
+      downloadJson,
+      downloadCsv
     };
   };
 
@@ -486,11 +727,18 @@
     isElementVisible,
     getDomPath,
     getButtonKey,
+    stripCommentUiText,
+    isLikelyCommentElement,
+    extractVisibleComments,
+    formatResultsAsCsv,
+    formatResultsAsJson,
     selectExpandCandidates,
     scoreScrollContainer,
     findScrollTarget,
     scrollForward,
     shouldStop,
+    getStopReason,
+    isMeaningfulProgress,
     createRunner
   };
 

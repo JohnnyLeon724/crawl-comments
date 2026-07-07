@@ -158,6 +158,50 @@ test('stops after configured idle rounds or hard limits', () => {
   assert.equal(expander.shouldStop({ idleRounds: 0, round: 2, totalClicks: 5, elapsedMs: 1000 }, config), true);
 });
 
+test('reports idle as the stop reason before generic hard limits', () => {
+  assert.equal(expander.getStopReason({
+    idleRounds: 3,
+    round: 2,
+    totalClicks: 5,
+    elapsedMs: 500
+  }, {
+    maxIdleRounds: 3,
+    maxRounds: 10,
+    maxClicks: 100,
+    maxRuntimeMs: 1000
+  }), 'idle');
+});
+
+test('does not treat mutation-only churn at the bottom as meaningful progress', () => {
+  assert.equal(expander.isMeaningfulProgress({
+    clickedThisRound: 0,
+    addedComments: 0,
+    mutationDelta: 12,
+    scrollResult: { changed: false }
+  }), false);
+
+  assert.equal(expander.isMeaningfulProgress({
+    clickedThisRound: 0,
+    addedComments: 0,
+    mutationDelta: 12,
+    scrollResult: { changed: true }
+  }), true);
+
+  assert.equal(expander.isMeaningfulProgress({
+    clickedThisRound: 1,
+    addedComments: 0,
+    mutationDelta: 0,
+    scrollResult: { changed: false }
+  }), true);
+
+  assert.equal(expander.isMeaningfulProgress({
+    clickedThisRound: 0,
+    addedComments: 2,
+    mutationDelta: 0,
+    scrollResult: { changed: false }
+  }), true);
+});
+
 test('scores scroll containers with comment-like containers above generic containers', () => {
   const generic = new FakeElement('div', '', {
     scrollHeight: 1200,
@@ -174,4 +218,57 @@ test('scores scroll containers with comment-like containers above generic contai
   assert.ok(
     expander.scoreScrollContainer(comments) > expander.scoreScrollContainer(generic)
   );
+});
+
+test('extracts unique visible comment-like blocks from the current DOM', () => {
+  const root = new FakeElement('div');
+  const first = root.appendChild(new FakeElement('div', '用户A：TCL电视画质不错 回复 展开3条回复', {
+    className: 'comment-item'
+  }));
+  root.appendChild(new FakeElement('div', '用户A：TCL电视画质不错 回复 展开3条回复', {
+    className: 'comment-item'
+  }));
+  const second = root.appendChild(new FakeElement('div', '用户B：售后一直没人处理', {
+    className: 'reply-item'
+  }));
+  root.appendChild(new FakeElement('button', '展开更多回复'));
+  root.appendChild(new FakeElement('div', '点赞', {
+    className: 'toolbar'
+  }));
+
+  const comments = expander.extractVisibleComments({
+    body: root,
+    documentElement: root,
+    querySelectorAll() {
+      return [first, second, ...root.children];
+    }
+  });
+
+  assert.deepEqual(
+    comments.map(item => item.text),
+    ['用户A：TCL电视画质不错', '用户B：售后一直没人处理']
+  );
+  assert.equal(comments[0].row_type, 'level1');
+  assert.equal(comments[1].row_type, 'level2');
+});
+
+test('formats crawl results as BOM-prefixed CSV for Excel', () => {
+  const csv = expander.formatResultsAsCsv([
+    {
+      row_type: 'level1',
+      text: '第一条评论',
+      dom_path: 'DIV:nth-of-type(1)',
+      captured_at: '2026-07-07T00:00:00.000Z'
+    },
+    {
+      row_type: 'level2',
+      text: '带,逗号和"引号"',
+      dom_path: 'DIV:nth-of-type(2)',
+      captured_at: '2026-07-07T00:00:01.000Z'
+    }
+  ]);
+
+  assert.equal(csv.charCodeAt(0), 0xfeff);
+  assert.match(csv, /row_type,text,dom_path,captured_at/);
+  assert.match(csv, /"带,逗号和""引号"""/);
 });
