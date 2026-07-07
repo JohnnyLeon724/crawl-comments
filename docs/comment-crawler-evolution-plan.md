@@ -84,7 +84,7 @@ output/
 | 6 | 已完成 | 批量 URL、断点续跑、失败重试 | 高 | 中 | 批量 runner 参数 | 中断后可 `--resume`，失败 URL 可重跑 |
 | 7 | 已完成 | 评论清洗、去重、层级归一 | 高 | 中 | `normalized-comments.jsonl` | 一级评论、二级回复、父子关系和去重稳定 |
 | 8 | 已完成 | AI 结构化 POC | 很高 | 中 | AI 输入批次、schema、输出 JSON | 少量评论能稳定输出情感、主题、依据 |
-| 9 | 未开始 | Excel 报表生成 | 高 | 中 | `comment-report.xlsx` | 包含总结、全部评论、负面、正面、AI 明细 |
+| 9 | 已完成 | Excel 报表生成 | 高 | 中 | `comment-report.xlsx` | 包含总结、全部评论、负面、正面、AI 明细 |
 | 10 | 未开始 | 人工 QA 与 prompt 迭代 | 高 | 低 | QA 样本与误判记录 | 抽样检查误判可定位到 prompt 或清洗问题 |
 | 11 | 未开始 | 扩展小红书 adapter | 中 | 中 | `adapters/xiaohongshu.js` | 复用同一 runner 输出标准 row |
 | 12 | 未开始 | 工程化增强 | 中 | 高 | 配置文件、日志、测试夹具 | 可长期维护，但不阻塞前期收益 |
