@@ -154,6 +154,23 @@
     return /^(回复|点赞|赞|分享|收藏|举报|评论|\d+)$/.test(compact);
   };
 
+  const isAuthWallText = value => {
+    const compact = normalizeText(value);
+    if (!compact) return false;
+
+    const loginSignals = [
+      /登录后推荐更懂你的笔记/,
+      /手机号登录/,
+      /获取验证码/,
+      /用户协议.*隐私政策/,
+      /儿童\/青少年个人信息保护规则/,
+      /微信扫码/,
+      /小红书如何扫码/
+    ];
+
+    return loginSignals.filter(pattern => pattern.test(compact)).length >= 2;
+  };
+
   const getElementMarker = el => {
     if (!el) return '';
 
@@ -175,6 +192,7 @@
     const text = stripCommentUiText(el);
     if (text.length < config.minCommentTextLength || text.length > config.maxCommentTextLength) return false;
     if (isActionOnlyText(text)) return false;
+    if (isAuthWallText(text)) return false;
 
     const marker = getElementMarker(el);
     const hasCommentMarker = /comment|reply|评论|回复/.test(marker);
@@ -724,6 +742,7 @@
     DEFAULT_CONFIG,
     normalizeText,
     isExpandText,
+    isAuthWallText,
     isElementVisible,
     getDomPath,
     getButtonKey,

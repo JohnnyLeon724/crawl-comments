@@ -252,6 +252,22 @@ test('extracts unique visible comment-like blocks from the current DOM', () => {
   assert.equal(comments[1].row_type, 'level2');
 });
 
+test('ignores Xiaohongshu login wall text when extracting comments', () => {
+  const loginWall = new FakeElement('div', '登录后推荐更懂你的笔记 可用 小红书 或 微信 扫码 手机号登录 +86获取验证码 登录 我已阅读并同意《用户协议》《隐私政策》《儿童/青少年个人信息保护规则》 新用户可直接登录 帮助与反馈：小红书 App 点击“我 - 帮助与客服”进行反馈', {
+    className: 'login-container'
+  });
+
+  const comments = expander.extractVisibleComments({
+    body: loginWall,
+    documentElement: loginWall,
+    querySelectorAll() {
+      return [loginWall];
+    }
+  });
+
+  assert.deepEqual(comments, []);
+});
+
 test('formats crawl results as BOM-prefixed CSV for Excel', () => {
   const csv = expander.formatResultsAsCsv([
     {

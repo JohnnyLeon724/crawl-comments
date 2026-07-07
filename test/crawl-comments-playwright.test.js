@@ -51,6 +51,17 @@ test('uses installed Chrome when Playwright bundled browser is unavailable', () 
   assert.equal(options.executablePath, executablePath);
 });
 
+test('detects Xiaohongshu login wall before comment extraction', () => {
+  const block = runner.detectPageBlock(
+    '登录后推荐更懂你的笔记 可用 小红书 或 微信 扫码 手机号登录 +86获取验证码 登录 我已阅读并同意《用户协议》《隐私政策》',
+    'https://www.xiaohongshu.com/explore/abc'
+  );
+
+  assert.equal(block.blocked, true);
+  assert.equal(block.reason, 'auth_required');
+  assert.match(block.message, /登录/);
+});
+
 test('rejects missing URL and conflicting browser modes', () => {
   assert.throws(() => runner.parseArgs([]), /--url/);
   assert.throws(() => runner.parseArgs([

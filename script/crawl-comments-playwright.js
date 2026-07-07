@@ -363,6 +363,46 @@ function buildLaunchOptions(args, chromium) {
   return options;
 }
 
+function detectPageBlock(text, pageUrl = '') {
+  const compact = String(text || '').replace(/\s+/g, '');
+  const url = String(pageUrl || '');
+
+  if (/website-login\/error|error_code=300017|error_code=300031/.test(url) || /安全限制|访问链接异常/.test(compact)) {
+    return {
+      blocked: true,
+      reason: 'security_block',
+      message: '检测到平台安全限制或访问异常页，当前页面不能采集评论'
+    };
+  }
+
+  const loginSignals = [
+    /登录后推荐更懂你的笔记/,
+    /手机号登录/,
+    /获取验证码/,
+    /用户协议.*隐私政策/,
+    /儿童\/青少年个人信息保护规则/,
+    /微信扫码/,
+    /小红书如何扫码/,
+    /请登录/,
+    /登录后查看/
+  ];
+  const signalCount = loginSignals.filter(pattern => pattern.test(compact)).length;
+
+  if (signalCount >= 2) {
+    return {
+      blocked: true,
+      reason: 'auth_required',
+      message: '检测到登录墙：请先在打开的 Chrome 窗口登录小红书，再重新运行采集命令'
+    };
+  }
+
+  return {
+    blocked: false,
+    reason: '',
+    message: ''
+  };
+}
+
 async function openBrowser(args) {
   const { chromium } = loadPlaywright();
 
@@ -413,6 +453,17 @@ async function crawlSingleUrl(args) {
     });
     await page.waitForTimeout(args.postLoadWaitMs);
 
+    const pageSnapshot = await page.evaluate(() => ({
+      href: location.href,
+      text: document.body?.innerText || ''
+    }));
+    const pageBlock = detectPageBlock(pageSnapshot.text, pageSnapshot.href);
+    if (pageBlock.blocked) {
+      const error = new Error(pageBlock.message);
+      error.stopReason = pageBlock.reason;
+      throw error;
+    }
+
     await page.evaluate(expanderScript);
     await page.waitForFunction(() => {
       const state = window.__commentExpanderV1?.getState?.();
@@ -430,6 +481,9 @@ async function crawlSingleUrl(args) {
   } catch (error) {
     status = 'failed';
     errors.push(error.message);
+    if (error.stopReason) {
+      payload.state = Object.assign({}, payload.state, { stopReason: error.stopReason });
+    }
   } finally {
     if (browserSession) {
       try {
@@ -667,6 +721,7 @@ module.exports = {
   loadPlaywright,
   findChromeExecutable,
   buildLaunchOptions,
+  detectPageBlock,
   crawlWithRetries,
   crawlBatch,
   crawlSingleUrl,
