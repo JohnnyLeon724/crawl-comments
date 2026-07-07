@@ -4,6 +4,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const os = require('node:os');
+const { createRequire } = require('node:module');
 
 const expander = require('./expand-comments-v1.js');
 
@@ -20,6 +22,18 @@ const DEFAULTS = {
   viewportWidth: 1440,
   viewportHeight: 1000
 };
+
+const CODEX_BUNDLED_NODE_MODULES = path.join(
+  os.homedir(),
+  '.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules'
+);
+
+const CHROME_EXECUTABLE_CANDIDATES = [
+  process.env.CHROME_EXECUTABLE,
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+].filter(Boolean);
 
 function printUsage() {
   console.log(`
@@ -291,13 +305,62 @@ function writeJson(filePath, data) {
 }
 
 function loadPlaywright() {
+  const errors = [];
+
   try {
     return require('playwright');
   } catch (error) {
-    const hint = '未找到 playwright。请先在项目中安装依赖，例如：npm install playwright';
-    error.message = `${hint}\n${error.message}`;
-    throw error;
+    errors.push(error.message);
   }
+
+  const fallbackNodeModules = [
+    process.env.PLAYWRIGHT_NODE_MODULES,
+    CODEX_BUNDLED_NODE_MODULES
+  ].filter(Boolean);
+
+  for (const nodeModulesDir of fallbackNodeModules) {
+    try {
+      const playwrightPackage = path.join(nodeModulesDir, 'playwright', 'package.json');
+      const fallbackRequire = createRequire(playwrightPackage);
+      return fallbackRequire('playwright');
+    } catch (error) {
+      errors.push(`${nodeModulesDir}: ${error.message}`);
+    }
+  }
+
+  const error = new Error([
+    '未找到 playwright。可任选一种方式处理：',
+    '1. 使用 Codex 内置运行时：/Users/gyp/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node script/crawl-comments-playwright.js ...',
+    '2. 或设置 PLAYWRIGHT_NODE_MODULES 指向包含 playwright 的 node_modules',
+    '3. 或在项目中安装依赖：npm install playwright',
+    ...errors
+  ].join('\n'));
+  throw error;
+}
+
+function findChromeExecutable(candidates = CHROME_EXECUTABLE_CANDIDATES) {
+  return candidates.find(candidate => fs.existsSync(candidate)) || '';
+}
+
+function buildLaunchOptions(args, chromium) {
+  const options = {
+    headless: args.headless,
+    viewport: args.viewport
+  };
+  const defaultExecutable = chromium && typeof chromium.executablePath === 'function'
+    ? chromium.executablePath()
+    : '';
+
+  if (defaultExecutable && fs.existsSync(defaultExecutable)) {
+    return options;
+  }
+
+  const installedChrome = findChromeExecutable();
+  if (installedChrome) {
+    options.executablePath = installedChrome;
+  }
+
+  return options;
 }
 
 async function openBrowser(args) {
@@ -316,10 +379,7 @@ async function openBrowser(args) {
     };
   }
 
-  const context = await chromium.launchPersistentContext(args.profile, {
-    headless: args.headless,
-    viewport: args.viewport
-  });
+  const context = await chromium.launchPersistentContext(args.profile, buildLaunchOptions(args, chromium));
   const page = await context.newPage();
 
   return {
@@ -604,6 +664,9 @@ module.exports = {
   buildManifest,
   buildBatchManifest,
   payloadToCsv,
+  loadPlaywright,
+  findChromeExecutable,
+  buildLaunchOptions,
   crawlWithRetries,
   crawlBatch,
   crawlSingleUrl,

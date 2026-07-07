@@ -32,6 +32,25 @@ test('defaults to a persistent profile when no CDP endpoint is provided', () => 
   assert.equal(args.headless, false);
 });
 
+test('loads Playwright from bundled runtime when local dependency is missing', () => {
+  const playwright = runner.loadPlaywright();
+
+  assert.equal(Boolean(playwright.chromium), true);
+});
+
+test('uses installed Chrome when Playwright bundled browser is unavailable', () => {
+  const executablePath = runner.findChromeExecutable();
+  const options = runner.buildLaunchOptions({
+    headless: false,
+    viewport: { width: 1440, height: 1000 }
+  }, {
+    executablePath: () => '/missing/playwright/chromium'
+  });
+
+  assert.match(executablePath, /Google Chrome|Chromium|Microsoft Edge/);
+  assert.equal(options.executablePath, executablePath);
+});
+
 test('rejects missing URL and conflicting browser modes', () => {
   assert.throws(() => runner.parseArgs([]), /--url/);
   assert.throws(() => runner.parseArgs([
