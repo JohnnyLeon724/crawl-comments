@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.comment-crawler/schemas/comment-row.schema.json",
+  "title": "Normalized Comment Row",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "row_key",
+    "platform",
+    "source_url",
+    "post_id",
+    "row_type",
+    "comment_id",
+    "root_comment_id",
+    "parent_comment_id",
+    "user_name",
+    "text",
+    "created_at",
+    "like_count",
+    "reply_to_user_name",
+    "root_text",
+    "raw"
+  ],
+  "properties": {
+    "row_key": {
+      "type": "string",
+      "description": "Stable key for dedupe and joins across processing stages."
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["douyin", "xiaohongshu", "weibo", "unknown"]
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "post_id": {
+      "type": "string"
+    },
+    "row_type": {
+      "type": "string",
+      "enum": ["level1", "level2"]
+    },
+    "comment_id": {
+      "type": "string"
+    },
+    "root_comment_id": {
+      "type": "string"
+    },
+    "parent_comment_id": {
+      "type": "string"
+    },
+    "user_name": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string"
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "like_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reply_to_user_name": {
+      "type": "string"
+    },
+    "root_text": {
+      "type": "string"
+    },
+    "raw": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}
