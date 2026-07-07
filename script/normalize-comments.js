@@ -5,9 +5,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const douyin = require('../adapters/douyin.js');
+const xiaohongshu = require('../adapters/xiaohongshu.js');
 
 const ADAPTERS = {
-  douyin: douyin.normalizeDouyinPayload
+  douyin: douyin.normalizeDouyinPayload,
+  xiaohongshu: xiaohongshu.normalizeXiaohongshuPayload
 };
 
 function printUsage() {
@@ -20,7 +22,7 @@ function printUsage() {
   --run-dir      可选，包含 raw-comments.json 的运行目录
   --input        可选，raw-comments.json 路径；与 --run-dir 二选一
   --out          可选，normalized-comments.jsonl 输出路径
-  --platform     必填，当前支持 douyin
+  --platform     必填，当前支持 douyin、xiaohongshu
   --source-url   可选，源 URL；未传时优先读取 raw payload 的 source_url
   --help         查看帮助
 `.trim());
