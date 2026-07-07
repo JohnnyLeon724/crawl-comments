@@ -1,0 +1,27 @@
+{
+  "source_url": "https://www.xiaohongshu.com/search_result/64aa11bb000000001203abcd?xsec_token=abc",
+  "results": [
+    {
+      "rank": 1,
+      "author": "Alice",
+      "userId": "abc123",
+      "profileUrl": "https://www.xiaohongshu.com/user/profile/abc123",
+      "text": "Main comment",
+      "likes": "2.1w",
+      "time": "03-25",
+      "is_reply": false,
+      "reply_to": ""
+    },
+    {
+      "rank": 2,
+      "author": "Bob",
+      "userId": "xyz789",
+      "profileUrl": "https://www.xiaohongshu.com/user/profile/xyz789",
+      "text": "Reply to Alice",
+      "likes": 3,
+      "time": "03-25",
+      "is_reply": true,
+      "reply_to": "Alice"
+    }
+  ]
+}

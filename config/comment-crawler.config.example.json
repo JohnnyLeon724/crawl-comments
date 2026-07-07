@@ -1,0 +1,24 @@
+{
+  "crawler": {
+    "profile": ".pw-profile",
+    "timeoutMs": 900000,
+    "postLoadWaitMs": 5000,
+    "delayMs": 2000,
+    "retries": 2,
+    "headless": false,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    }
+  },
+  "ai": {
+    "batchSize": 50,
+    "codexBin": "/Applications/Codex.app/Contents/Resources/codex"
+  },
+  "output": {
+    "baseDir": "output"
+  },
+  "qa": {
+    "sampleSize": 30
+  }
+}
