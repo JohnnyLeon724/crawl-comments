@@ -1,1 +1,4 @@
 MediaCrawler/
+node_modules/
+.pw-profile/
+output/
