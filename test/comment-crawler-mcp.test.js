@@ -161,6 +161,40 @@ test('stage 3 connects to Chrome CDP and disconnects without closing Chrome', as
   assert.deepEqual(calls.slice(1), ['disconnect']);
 });
 
+test('stage 3 falls back to raw CDP when Playwright cannot manage browser contexts', async () => {
+  const cdp = require(cdpPath);
+  const calls = [];
+  const rawSession = {
+    page: { url: () => 'https://www.douyin.com/video/123' },
+    close: async () => calls.push(['rawClose'])
+  };
+
+  const session = await cdp.connectToCdp({
+    cdpEndpoint: 'http://127.0.0.1:9222',
+    timeoutMs: 1234,
+    playwright: {
+      chromium: {
+        connectOverCDP: async () => {
+          calls.push(['playwrightConnect']);
+          throw new Error('browserType.connectOverCDP: Protocol error (Browser.setDownloadBehavior): Browser context management is not supported.');
+        }
+      }
+    },
+    rawCdpConnect: async options => {
+      calls.push(['rawConnect', options.cdpEndpoint, options.timeoutMs]);
+      return rawSession;
+    }
+  });
+
+  assert.equal(session, rawSession);
+  await session.close();
+  assert.deepEqual(calls, [
+    ['playwrightConnect'],
+    ['rawConnect', 'http://127.0.0.1:9222', 1234],
+    ['rawClose']
+  ]);
+});
+
 test('stage 3 selects the latest HTTP page and reads a page snapshot', async () => {
   assert.equal(fs.existsSync(cdpPath), true);
 
