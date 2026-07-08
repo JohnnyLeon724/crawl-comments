@@ -1186,7 +1186,7 @@ git commit -m "docs：更新评论交付坐标点击流程"
 - Consumes: all previous tasks.
 - Produces: verified MCP coordinate-click implementation ready for live Douyin/Xiaohongshu smoke tests.
 
-- [ ] **Step 1: Run all Node tests**
+- [x] **Step 1: Run all Node tests**
 
 Run:
 
@@ -1196,7 +1196,7 @@ node --test --test-reporter=dot test/*.test.js
 
 Expected: PASS.
 
-- [ ] **Step 2: Run all Python pipeline tests**
+- [x] **Step 2: Run all Python pipeline tests**
 
 Run:
 
@@ -1206,7 +1206,7 @@ src/pipeline/.venv/bin/python -m unittest discover -s test/pipeline
 
 Expected: PASS.
 
-- [ ] **Step 3: Inspect MCP status manually**
+- [x] **Step 3: Inspect MCP status manually**
 
 Run the MCP status test through the configured client or existing MCP test command:
 
@@ -1216,7 +1216,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: PASS and `expand_and_capture_comment_batches` remains exposed.
 
-- [ ] **Step 4: Prepare live smoke command for the user**
+- [x] **Step 4: Prepare live smoke command for the user**
 
 Use this MCP payload against an already-open logged-in Chrome page:
 
@@ -1242,7 +1242,7 @@ Use this MCP payload against an already-open logged-in Chrome page:
 
 Expected: tool result includes `clickMode`, `coordinateClickCount`, `domClickCount`, `fallbackClickCount`, and writes `capture-state.json`.
 
-- [ ] **Step 5: Commit verification-only fixes if needed**
+- [x] **Step 5: Commit verification-only fixes if needed**
 
 If Step 1 or Step 2 required small corrections:
 
