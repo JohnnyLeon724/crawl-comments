@@ -609,7 +609,7 @@ git commit -m "feat：增加raw CDP鼠标事件"
 }
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add:
 
@@ -710,7 +710,7 @@ test('expandVisibleCommentsOnce falls back to DOM click when coordinate input is
 });
 ```
 
-- [ ] **Step 2: Run the failing tests**
+- [x] **Step 2: Run the failing tests**
 
 Run:
 
@@ -720,7 +720,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: FAIL because `clickExpandTargets` is not exported and `expandVisibleCommentsOnce` does not accept injected click helpers.
 
-- [ ] **Step 3: Implement click executors**
+- [x] **Step 3: Implement click executors**
 
 Add to `mcp/comment-crawler-tools.js`:
 
@@ -901,7 +901,7 @@ clickExpandTargets,
 domClickExpandTargets,
 ```
 
-- [ ] **Step 4: Run the tests**
+- [x] **Step 4: Run the tests**
 
 Run:
 
@@ -911,7 +911,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add mcp/comment-crawler-tools.js test/comment-crawler-mcp.test.js
