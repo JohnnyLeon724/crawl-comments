@@ -62,7 +62,7 @@
   - `DEFAULT_CLICK_PROFILE`
   - `normalizeExpandCaptureConfig(args = {})` returns a `click` object.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add this test near the existing expand/capture config tests in `test/comment-crawler-mcp.test.js`:
 
@@ -108,7 +108,7 @@ test('normalizes coordinate click configuration with safe defaults and clamped r
 });
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -118,7 +118,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: FAIL because `normalizeClickMode` and `normalizeClickProfile` are not exported.
 
-- [ ] **Step 3: Add the minimal implementation**
+- [x] **Step 3: Add the minimal implementation**
 
 In `mcp/comment-crawler-tools.js`, add this near the current default config:
 
@@ -193,7 +193,7 @@ toNonNegativeInteger,
 normalizeClickProfile,
 ```
 
-- [ ] **Step 4: Run the test again**
+- [x] **Step 4: Run the test again**
 
 Run:
 
@@ -203,7 +203,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add mcp/comment-crawler-tools.js test/comment-crawler-mcp.test.js
