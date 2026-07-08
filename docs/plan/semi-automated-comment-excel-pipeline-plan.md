@@ -37,6 +37,8 @@ AI
 
 这条路线避免让 AI 直接写 Excel，也避免让脚本硬猜复杂 DOM 语义。
 
+大评论量页面需要从“整页 DOM snapshot”升级为“批次 candidate snapshot”，详见 `docs/plan/comment-crawler-batch-candidate-development-plan.md`。
+
 ## 2. 现有基础
 
 当前项目已经具备以下能力：
