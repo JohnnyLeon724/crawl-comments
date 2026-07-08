@@ -31,6 +31,7 @@ test('stage 2 exposes a comment crawler status tool', async () => {
   assert.ok(statusTool);
   assert.equal(statusTool.inputSchema.type, 'object');
   assert.ok(toolNames.includes('capture_current_comment_dom_snapshot'));
+  assert.ok(toolNames.slice(0, 4).includes('capture_current_comment_dom_snapshot'));
 
   const result = await tools.callTool('get_comment_crawler_status', {}, { projectRoot });
   assert.equal(result.isError, false);

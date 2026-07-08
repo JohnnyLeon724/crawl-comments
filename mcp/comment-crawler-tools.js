@@ -32,7 +32,7 @@ function getCommentCrawlerStatus(options = {}) {
 }
 
 function listTools() {
-  return [
+  const tools = [
     {
       name: STATUS_TOOL_NAME,
       title: 'Comment Crawler Status',
@@ -237,6 +237,18 @@ function listTools() {
       }
     }
   ];
+
+  const priority = [
+    STATUS_TOOL_NAME,
+    EXPAND_TOOL_NAME,
+    CAPTURE_DOM_TOOL_NAME,
+    SAVE_TOOL_NAME,
+    NORMALIZE_TOOL_NAME
+  ];
+
+  return priority
+    .map(name => tools.find(tool => tool.name === name))
+    .filter(Boolean);
 }
 
 function buildToolResult(value) {
