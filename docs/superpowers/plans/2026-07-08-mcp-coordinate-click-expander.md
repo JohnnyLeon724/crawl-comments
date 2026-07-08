@@ -936,7 +936,7 @@ git commit -m "feat：增加MCP坐标点击执行器"
   - `capture-state.json` includes aggregate click fields.
   - Tool result includes aggregate click fields.
 
-- [ ] **Step 1: Write the failing integration test**
+- [x] **Step 1: Write the failing integration test**
 
 Extend the existing `expand_and_capture_comment_batches combines expansion, capture, scrolling, and idle stop` test. Add these arguments:
 
@@ -988,7 +988,7 @@ assert.deepEqual(calls.slice(0, 1), [
 ]);
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -998,7 +998,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: FAIL because the loop does not pass `click` config and does not aggregate click fields.
 
-- [ ] **Step 3: Update tool schema and loop aggregation**
+- [x] **Step 3: Update tool schema and loop aggregation**
 
 In the `EXPAND_CAPTURE_TOOL_NAME` input schema, add properties:
 
@@ -1073,7 +1073,7 @@ fallbackClickCount,
 lastClickErrors
 ```
 
-- [ ] **Step 4: Run the test again**
+- [x] **Step 4: Run the test again**
 
 Run:
 
@@ -1083,7 +1083,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add mcp/comment-crawler-tools.js test/comment-crawler-mcp.test.js
