@@ -236,7 +236,7 @@ git commit -m "feat：增加MCP点击配置归一化"
 }
 ```
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add this test:
 
@@ -314,7 +314,7 @@ test('findVisibleExpandTargets returns innermost visible expand controls with bo
 });
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -324,7 +324,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: FAIL because `findVisibleExpandTargets` is not exported.
 
-- [ ] **Step 3: Implement target discovery**
+- [x] **Step 3: Implement target discovery**
 
 Add `findVisibleExpandTargets` to `mcp/comment-crawler-tools.js`. The page function should:
 
@@ -418,7 +418,7 @@ async function findVisibleExpandTargets(page, options = {}) {
 
 Export `findVisibleExpandTargets`.
 
-- [ ] **Step 4: Run the test again**
+- [x] **Step 4: Run the test again**
 
 Run:
 
@@ -428,7 +428,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add mcp/comment-crawler-tools.js test/comment-crawler-mcp.test.js
