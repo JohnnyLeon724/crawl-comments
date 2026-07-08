@@ -7,3 +7,4 @@ output/
 .agents/
 __pycache__/
 .venv/
+.chrome-comment-crawler/
