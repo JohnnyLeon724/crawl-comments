@@ -1056,6 +1056,12 @@ test('expand_and_capture_comment_batches is exposed as the main coverage workflo
   assert.equal(captureTool.inputSchema.properties.expandWaitMsMin.type, 'number');
   assert.equal(captureTool.inputSchema.properties.scrollWaitMsMax.type, 'number');
   assert.equal(captureTool.inputSchema.properties.scrollStepRatioMin.type, 'number');
+  assert.deepEqual(captureTool.inputSchema.properties.clickMode.enum, ['coordinate', 'dom-click', 'auto']);
+  assert.deepEqual(captureTool.inputSchema.properties.fallbackClickMode.enum, ['dom-click', 'coordinate', 'auto']);
+  assert.equal(captureTool.inputSchema.properties.clickJitterPx.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.mouseMoveStepsMin.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.clickDownMsMax.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.clickGapMsMax.type, 'number');
   assert.equal(captureTool.inputSchema.properties.closePageAfter.type, 'boolean');
 });
 
@@ -1135,6 +1141,15 @@ test('expand_and_capture_comment_batches captures before scrolling and stops on 
     scrollWaitMsMax: 1,
     scrollStepRatioMin: 0.55,
     scrollStepRatioMax: 0.55,
+    clickMode: 'coordinate',
+    fallbackClickMode: 'dom-click',
+    clickJitterPx: 2,
+    mouseMoveStepsMin: 4,
+    mouseMoveStepsMax: 4,
+    clickDownMsMin: 60,
+    clickDownMsMax: 60,
+    clickGapMsMin: 300,
+    clickGapMsMax: 300,
     closePageAfter: true
   }, {
     connectToCdp: async () => ({
@@ -1142,8 +1157,17 @@ test('expand_and_capture_comment_batches captures before scrolling and stops on 
       close: async () => calls.push(['sessionClose'])
     }),
     expandVisibleCommentsOnce: async (_page, options) => {
-      calls.push(['expand', options.maxClicksPerRound]);
-      return { clicked: round === 0 ? 1 : 0, errors: 0 };
+      calls.push(['expand', options.maxClicksPerRound, options.click.clickMode, options.click.clickJitterPx]);
+      return {
+        clicked: round === 0 ? 1 : 0,
+        errors: 0,
+        click_mode: 'coordinate',
+        fallback_used: false,
+        coordinate_click_count: round === 0 ? 1 : 0,
+        dom_click_count: 0,
+        fallback_click_count: 0,
+        last_click_errors: []
+      };
     },
     captureCommentCandidateBatch: async (_page, options) => {
       calls.push(['capture', options.batchId, options.scrollAfterCapture, options.seenCandidateHashes.length]);
@@ -1169,6 +1193,10 @@ test('expand_and_capture_comment_batches captures before scrolling and stops on 
   assert.equal(result.structuredContent.lastBatchId, 'batch_0002');
   assert.equal(result.structuredContent.nextBatchId, 'batch_0003');
   assert.equal(result.structuredContent.closedPage, true);
+  assert.equal(result.structuredContent.clickMode, 'coordinate');
+  assert.equal(result.structuredContent.coordinateClickCount, 1);
+  assert.equal(result.structuredContent.domClickCount, 0);
+  assert.equal(result.structuredContent.fallbackClickCount, 0);
   assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0001', 'comment-dom-batch.json')), true);
   assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0002', 'comment-dom-batch.json')), true);
   assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0003', 'comment-dom-batch.json')), false);
@@ -1179,14 +1207,18 @@ test('expand_and_capture_comment_batches captures before scrolling and stops on 
   assert.equal(state.total_candidates, 2);
   assert.equal(state.idle_rounds, 2);
   assert.equal(state.stop_reason, 'idle');
+  assert.equal(state.click_mode, 'coordinate');
+  assert.equal(state.coordinate_click_count, 1);
+  assert.equal(state.dom_click_count, 0);
+  assert.equal(state.fallback_click_count, 0);
   assert.deepEqual(state.seen_candidate_hashes, ['hash-1', 'hash-2']);
   assert.deepEqual(calls.slice(0, 8), [
-    ['expand', 3],
+    ['expand', 3, 'coordinate', 2],
     ['sleep', 1],
     ['capture', 'batch_0001', false, 0],
     ['scroll', 0.55],
     ['sleep', 1],
-    ['expand', 3],
+    ['expand', 3, 'coordinate', 2],
     ['sleep', 1],
     ['capture', 'batch_0002', false, 1]
   ]);

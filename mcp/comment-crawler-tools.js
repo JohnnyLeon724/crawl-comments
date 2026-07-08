@@ -530,6 +530,44 @@ function listTools() {
             type: 'number',
             description: 'Maximum scroll step as a ratio of viewport height.'
           },
+          clickMode: {
+            type: 'string',
+            enum: ['coordinate', 'dom-click', 'auto'],
+            description: 'How expand controls are clicked. Defaults to coordinate.'
+          },
+          fallbackClickMode: {
+            type: 'string',
+            enum: ['dom-click', 'coordinate', 'auto'],
+            description: 'Fallback click mode when coordinate input is unavailable.'
+          },
+          clickJitterPx: {
+            type: 'number',
+            description: 'Maximum random coordinate jitter in CSS pixels.'
+          },
+          mouseMoveStepsMin: {
+            type: 'number',
+            description: 'Minimum mouse move interpolation steps for coordinate clicks.'
+          },
+          mouseMoveStepsMax: {
+            type: 'number',
+            description: 'Maximum mouse move interpolation steps for coordinate clicks.'
+          },
+          clickDownMsMin: {
+            type: 'number',
+            description: 'Minimum mouse button hold time for coordinate clicks.'
+          },
+          clickDownMsMax: {
+            type: 'number',
+            description: 'Maximum mouse button hold time for coordinate clicks.'
+          },
+          clickGapMsMin: {
+            type: 'number',
+            description: 'Minimum gap after each coordinate click.'
+          },
+          clickGapMsMax: {
+            type: 'number',
+            description: 'Maximum gap after each coordinate click.'
+          },
           maxCandidates: {
             type: 'number',
             description: 'Maximum candidates captured in each non-empty batch.'
@@ -569,6 +607,14 @@ function listTools() {
           candidateCount: { type: 'number' },
           totalClicks: { type: 'number' },
           totalErrors: { type: 'number' },
+          clickMode: { type: 'string' },
+          coordinateClickCount: { type: 'number' },
+          domClickCount: { type: 'number' },
+          fallbackClickCount: { type: 'number' },
+          lastClickErrors: {
+            type: 'array',
+            items: { type: 'string' }
+          },
           idleRounds: { type: 'number' },
           lastBatchId: { type: 'string' },
           nextBatchId: { type: 'string' },
@@ -1682,6 +1728,12 @@ async function expandAndCaptureCommentBatches(args = {}, context = {}) {
     let candidateCount = Number(previousState.total_candidates) || 0;
     let totalClicks = Number(previousState.total_clicks) || 0;
     let totalErrors = Number(previousState.total_errors) || 0;
+    let coordinateClickCount = Number(previousState.coordinate_click_count) || 0;
+    let domClickCount = Number(previousState.dom_click_count) || 0;
+    let fallbackClickCount = Number(previousState.fallback_click_count) || 0;
+    let lastClickErrors = Array.isArray(previousState.last_click_errors)
+      ? previousState.last_click_errors.slice(-5)
+      : [];
     let idleRounds = Number(previousState.idle_rounds) || 0;
     let lastBatchId = String(previousState.last_batch_id || '');
     let nextBatchId = resolveBatchId({}, previousState);
@@ -1706,11 +1758,20 @@ async function expandAndCaptureCommentBatches(args = {}, context = {}) {
       roundCount += 1;
 
       const expandResult = await expandStep(page, {
-        maxClicksPerRound: config.maxClicksPerRound
+        maxClicksPerRound: config.maxClicksPerRound,
+        click: config.click,
+        random,
+        sleep: wait
       });
       const clickedThisRound = Number(expandResult && expandResult.clicked) || 0;
       totalClicks += clickedThisRound;
       totalErrors += Number(expandResult && expandResult.errors) || 0;
+      coordinateClickCount += Number(expandResult && expandResult.coordinate_click_count) || 0;
+      domClickCount += Number(expandResult && expandResult.dom_click_count) || 0;
+      fallbackClickCount += Number(expandResult && expandResult.fallback_click_count) || 0;
+      if (Array.isArray(expandResult && expandResult.last_click_errors)) {
+        lastClickErrors = lastClickErrors.concat(expandResult.last_click_errors).slice(-5);
+      }
 
       await wait(pickRangeValue(config.expandWaitMs, random));
 
@@ -1789,6 +1850,11 @@ async function expandAndCaptureCommentBatches(args = {}, context = {}) {
         totalErrors
       });
       previousState.total_errors = totalErrors;
+      previousState.click_mode = config.click.clickMode;
+      previousState.coordinate_click_count = coordinateClickCount;
+      previousState.dom_click_count = domClickCount;
+      previousState.fallback_click_count = fallbackClickCount;
+      previousState.last_click_errors = lastClickErrors;
       output.writeJson(stateFile, previousState);
     }
 
@@ -1806,6 +1872,11 @@ async function expandAndCaptureCommentBatches(args = {}, context = {}) {
       candidateCount,
       totalClicks,
       totalErrors,
+      clickMode: config.click.clickMode,
+      coordinateClickCount,
+      domClickCount,
+      fallbackClickCount,
+      lastClickErrors,
       idleRounds,
       lastBatchId,
       nextBatchId,
