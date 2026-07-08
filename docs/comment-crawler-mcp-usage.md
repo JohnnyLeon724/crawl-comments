@@ -4,11 +4,12 @@
 
 ## 1. 当前能力
 
-当前 MCP server 已实现 7 个工具：
+当前 MCP server 已实现 8 个工具：
 
 | 工具 | 用途 | 输出 |
 |---|---|---|
 | `get_comment_crawler_status` | 检查 MCP server 状态 | server 版本、项目目录 |
+| `expand_and_capture_comment_batches` | 主流程工具：边展开、边捕获当前 DOM、边滚动、边写 batch | 多个 `batches/<batch_id>/comment-dom-batch.json`、`capture-state.json` |
 | `expand_current_page_comments` | 连接当前 Chrome CDP 页面，注入 `src/browser/expand-comments-v1.js` 展开和下滚评论 | `stopReason`、评论数、点击数、轮次 |
 | `capture_comment_candidate_batch` | 捕获当前可见窗口内的评论候选 DOM，写入 batch，并可顺手下滚 | `batches/<batch_id>/comment-dom-batch.json`、`capture-state.json` |
 | `capture_comment_candidate_batches_until_idle` | 在同一个 Chrome 页面内连续捕获多个 candidate batch，直到连续空 batch 或达到上限 | 多个 `batches/<batch_id>/comment-dom-batch.json`、`capture-state.json` |
@@ -77,17 +78,40 @@ args = ["/Users/gyp/Documents/demo/mcp/comment-crawler-server.js"]
 调用 comment-crawler 的 get_comment_crawler_status
 ```
 
-2. 展开当前 Chrome 页面评论：
+2. 使用主流程工具边展开边捕获 DOM batches：
 
 ```text
-调用 comment-crawler 的 expand_current_page_comments，参数：
+调用 comment-crawler 的 expand_and_capture_comment_batches，参数：
 {
   "cdpEndpoint": "http://127.0.0.1:9222",
-  "timeoutMs": 600000
+  "outDir": "output/douyin_batch_ai_test_001/runs/task_0001",
+  "taskId": "task_0001",
+  "maxRuntimeMs": 1800000,
+  "maxRounds": 800,
+  "maxBatches": 300,
+  "maxIdleRounds": 8,
+  "maxClicksPerRound": 3,
+  "maxCandidates": 80,
+  "maxCharsPerCandidate": 2500,
+  "includeHtml": true,
+  "includeText": true,
+  "closePageAfter": true
 }
 ```
 
-3. 捕获当前页面的一个评论候选 batch，供 AI 结构化：
+输出会落在：
+
+```text
+output/douyin_batch_ai_test_001/runs/task_0001/
+  capture-state.json
+  batches/batch_0001/comment-dom-batch.json
+  batches/batch_0002/comment-dom-batch.json
+  ...
+```
+
+这个工具的循环顺序是“点击展开 -> 等待 -> 捕获当前 DOM -> 写 batch -> 滚动 -> 等待”，避免展开到底后只抓到底部 DOM。
+
+3. 如果需要手动调试，可以只捕获当前页面的一个评论候选 batch：
 
 ```text
 调用 comment-crawler 的 capture_comment_candidate_batch，参数：
@@ -106,17 +130,9 @@ args = ["/Users/gyp/Documents/demo/mcp/comment-crawler-server.js"]
 }
 ```
 
-输出会落在：
-
-```text
-output/douyin_batch_ai_test_001/runs/task_0001/
-  capture-state.json
-  batches/batch_0001/comment-dom-batch.json
-```
-
 继续捕获下一批时，把 `batchId` 改成 `batch_0002`，或让工具根据 `capture-state.json` 推导下一批。批次达到上限时继续下一 batch，不要扩大单次 token。
 
-如果希望 MCP 自动连续捕获，可以改用 `capture_comment_candidate_batches_until_idle`：
+如果只想自动连续捕获而不点击展开，可以改用 `capture_comment_candidate_batches_until_idle`：
 
 ```text
 调用 comment-crawler 的 capture_comment_candidate_batches_until_idle，参数：
@@ -135,7 +151,7 @@ output/douyin_batch_ai_test_001/runs/task_0001/
 }
 ```
 
-它适合评论量大、需要先把 DOM 候选批次全部落盘的页面；后续 AI 仍然逐个 batch 结构化，不要把多个 batch 合并后一次性发给 AI。
+它适合调试滚动捕获；正式客户交付默认使用 `expand_and_capture_comment_batches`。后续 AI 仍然逐个 batch 结构化，不要把多个 batch 合并后一次性发给 AI。
 
 `closePageAfter: true` 只用在每个任务最后一次 MCP 页面操作上。它会在 batch、snapshot 或 raw 保存完成后关闭当前 Chrome tab，避免下一条链接打开后 MCP 仍然选中上一条任务页面。
 
@@ -268,7 +284,7 @@ node --test test/*.test.js
 | 连接 CDP 失败 | Chrome 没用 `--remote-debugging-port=9222` 启动 | 重新按第 2 节启动 Chrome |
 | 评论数为 0 | 页面未登录、当前 tab 不对、页面评论未加载 | 在 CDP Chrome 中登录并切到目标页面 |
 | Codex 里看不到新工具 | MCP 进程还在用旧代码，或 Codex 未刷新工具列表 | 重启 Codex，或删除后重新添加该 MCP 配置 |
-| 保存时报“未找到 comment expander payload” | 还没运行展开工具，或页面刷新过 | 先重新调用 `expand_current_page_comments` |
+| 保存时报“未找到 comment expander payload” | 旧版 raw 保存依赖 `expand_current_page_comments` 的 payload | 若只是交付 Excel，改用 `expand_and_capture_comment_batches`；若要保存 raw，对当前页面重新调用 `expand_current_page_comments` |
 | 输出路径被拒绝 | `outDir` 不在项目 `output/` 下 | 使用 `output/<run_id>` |
 | 页面被拒绝 | 当前 URL 不是抖音或小红书域名 | 切到支持的平台页面 |
 | 小红书采到登录弹窗 | 专用 profile 未登录 | 在该 Chrome profile 里完成登录后重跑 |

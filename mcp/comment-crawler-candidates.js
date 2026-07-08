@@ -193,6 +193,18 @@ function buildCandidateHash(input) {
   return crypto.createHash('sha1').update(basis).digest('hex');
 }
 
+function isAncestorElement(parent, child) {
+  if (!parent || !child || parent === child) return false;
+  let current = child.parentElement;
+
+  while (current) {
+    if (current === parent) return true;
+    current = current.parentElement;
+  }
+
+  return false;
+}
+
 function isCandidateElement(el, options) {
   if (!el) return false;
   const rect = getRect(el);
@@ -208,6 +220,41 @@ function isCandidateElement(el, options) {
 
 function isSupportedRoleHint(roleHint) {
   return roleHint === 'comment_candidate' || roleHint === 'reply_candidate';
+}
+
+function hasCandidateDescendantElement(el, elements, options) {
+  return Array.from(elements || []).some(other => (
+    other !== el &&
+    isAncestorElement(el, other) &&
+    isCandidateElement(other, options)
+  ));
+}
+
+function hasCandidateDescendantRecord(record, records, options) {
+  const parentPath = String(record && record.dom_path || '');
+  if (!parentPath) return false;
+
+  return Array.from(records || []).some(other => {
+    if (!other || other === record) return false;
+    const childPath = String(other.dom_path || '');
+    if (!childPath.startsWith(`${parentPath}>`)) return false;
+    const roleHint = String(other.role_hint || '');
+    const rawText = cleanText(other.inner_text);
+    const marker = cleanText(other.marker);
+    const rect = Object.assign({
+      top: 0,
+      left: 0,
+      width: 0,
+      height: 0
+    }, other.rect);
+
+    return (
+      isSupportedRoleHint(roleHint) &&
+      isVisibleRect(rect, options.viewportHeight) &&
+      !isNoiseText(rawText) &&
+      !isNoiseMarker(marker)
+    );
+  });
 }
 
 function toScrollValue(value, fallback) {
@@ -238,6 +285,7 @@ function buildCommentDomBatchFromRecords(records, options = {}) {
     if (!isVisibleRect(rect, normalized.viewportHeight)) continue;
     if (isNoiseText(rawText)) continue;
     if (isNoiseMarker(marker)) continue;
+    if (hasCandidateDescendantRecord(record, records, normalized)) continue;
 
     const innerText = normalized.includeText
       ? rawText.slice(0, normalized.maxCharsPerCandidate)
@@ -302,12 +350,14 @@ function buildCommentDomBatchFromRecords(records, options = {}) {
 function buildCommentDomBatchFromElements(elements, options = {}) {
   const normalized = normalizeCandidateOptions(options);
   const capturedAt = options.capturedAt || new Date().toISOString();
+  const sourceElements = Array.from(elements || []);
   const seen = new Set(normalized.seenCandidateHashes);
   const candidates = [];
   let eligibleUnseenCount = 0;
 
-  for (const el of Array.from(elements || [])) {
+  for (const el of sourceElements) {
     if (!isCandidateElement(el, normalized)) continue;
+    if (hasCandidateDescendantElement(el, sourceElements, normalized)) continue;
 
     const roleHint = getRoleHint(el);
     const innerText = normalized.includeText

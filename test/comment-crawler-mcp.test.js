@@ -803,6 +803,161 @@ test('capture_comment_candidate_batches_until_idle is exposed with loop controls
   assert.equal(captureTool.inputSchema.properties.closePageAfter.type, 'boolean');
 });
 
+test('expand_and_capture_comment_batches is exposed as the main coverage workflow', () => {
+  const tools = require(toolsPath);
+  const listed = tools.listTools();
+  const captureTool = listed.find(tool => tool.name === 'expand_and_capture_comment_batches');
+
+  assert.ok(captureTool);
+  assert.equal(captureTool.inputSchema.properties.outDir.type, 'string');
+  assert.equal(captureTool.inputSchema.properties.taskId.type, 'string');
+  assert.equal(captureTool.inputSchema.properties.maxRounds.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.maxBatches.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.maxIdleRounds.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.maxClicksPerRound.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.expandWaitMsMin.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.scrollWaitMsMax.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.scrollStepRatioMin.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.closePageAfter.type, 'boolean');
+});
+
+test('expand_and_capture_comment_batches captures before scrolling and stops on idle', async () => {
+  const tools = require(toolsPath);
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const outDir = path.join(projectRoot, 'output', 'task_0001');
+  const calls = [];
+  const page = {
+    url: () => 'https://www.douyin.com/video/123',
+    close: async options => calls.push(['pageClose', options.runBeforeUnload])
+  };
+  const batchesByRound = [
+    {
+      schema_version: 'comment-dom-batch-v1',
+      batch_id: 'batch_0001',
+      task_id: 'task_0001',
+      platform: 'douyin',
+      source_url: 'https://www.douyin.com/video/123',
+      captured_at: '2026-07-08T06:00:00.000Z',
+      scroll: {},
+      state: { new_candidate_count: 1, seen_candidate_count: 1, has_more: false, stop_reason: '' },
+      limits: {},
+      candidates: [{ candidate_id: 'candidate_000001', candidate_hash: 'hash-1' }]
+    },
+    {
+      schema_version: 'comment-dom-batch-v1',
+      batch_id: 'batch_0002',
+      task_id: 'task_0001',
+      platform: 'douyin',
+      source_url: 'https://www.douyin.com/video/123',
+      captured_at: '2026-07-08T06:00:01.000Z',
+      scroll: {},
+      state: { new_candidate_count: 1, seen_candidate_count: 2, has_more: false, stop_reason: '' },
+      limits: {},
+      candidates: [{ candidate_id: 'candidate_000001', candidate_hash: 'hash-2' }]
+    },
+    {
+      schema_version: 'comment-dom-batch-v1',
+      batch_id: 'batch_0003',
+      task_id: 'task_0001',
+      platform: 'douyin',
+      source_url: 'https://www.douyin.com/video/123',
+      captured_at: '2026-07-08T06:00:02.000Z',
+      scroll: {},
+      state: { new_candidate_count: 0, seen_candidate_count: 2, has_more: false, stop_reason: '' },
+      limits: {},
+      candidates: []
+    },
+    {
+      schema_version: 'comment-dom-batch-v1',
+      batch_id: 'batch_0003',
+      task_id: 'task_0001',
+      platform: 'douyin',
+      source_url: 'https://www.douyin.com/video/123',
+      captured_at: '2026-07-08T06:00:03.000Z',
+      scroll: {},
+      state: { new_candidate_count: 0, seen_candidate_count: 2, has_more: false, stop_reason: '' },
+      limits: {},
+      candidates: []
+    }
+  ];
+  let round = 0;
+
+  const result = await tools.callTool('expand_and_capture_comment_batches', {
+    outDir,
+    taskId: 'task_0001',
+    maxRounds: 10,
+    maxBatches: 5,
+    maxIdleRounds: 2,
+    maxClicksPerRound: 3,
+    maxCandidates: 2,
+    maxCharsPerCandidate: 1000,
+    expandWaitMsMin: 1,
+    expandWaitMsMax: 1,
+    scrollWaitMsMin: 1,
+    scrollWaitMsMax: 1,
+    scrollStepRatioMin: 0.55,
+    scrollStepRatioMax: 0.55,
+    closePageAfter: true
+  }, {
+    connectToCdp: async () => ({
+      page,
+      close: async () => calls.push(['sessionClose'])
+    }),
+    expandVisibleCommentsOnce: async (_page, options) => {
+      calls.push(['expand', options.maxClicksPerRound]);
+      return { clicked: round === 0 ? 1 : 0, errors: 0 };
+    },
+    captureCommentCandidateBatch: async (_page, options) => {
+      calls.push(['capture', options.batchId, options.scrollAfterCapture, options.seenCandidateHashes.length]);
+      return Object.assign({}, batchesByRound[round], { batch_id: options.batchId });
+    },
+    scrollCommentContainer: async (_page, options) => {
+      calls.push(['scroll', options.scrollStepRatio]);
+      round += 1;
+      return { before: round * 100, after: round * 100 + 50, changed: round <= 2, atBottom: round > 2 };
+    },
+    sleep: async ms => calls.push(['sleep', ms]),
+    projectRoot
+  });
+
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.status, 'success');
+  assert.equal(result.structuredContent.stopReason, 'idle');
+  assert.equal(result.structuredContent.roundCount, 4);
+  assert.equal(result.structuredContent.batchCount, 2);
+  assert.equal(result.structuredContent.candidateCount, 2);
+  assert.equal(result.structuredContent.totalClicks, 1);
+  assert.equal(result.structuredContent.idleRounds, 2);
+  assert.equal(result.structuredContent.lastBatchId, 'batch_0002');
+  assert.equal(result.structuredContent.nextBatchId, 'batch_0003');
+  assert.equal(result.structuredContent.closedPage, true);
+  assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0001', 'comment-dom-batch.json')), true);
+  assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0002', 'comment-dom-batch.json')), true);
+  assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0003', 'comment-dom-batch.json')), false);
+
+  const state = JSON.parse(fs.readFileSync(path.join(outDir, 'capture-state.json'), 'utf8'));
+  assert.equal(state.round, 4);
+  assert.equal(state.total_clicks, 1);
+  assert.equal(state.total_candidates, 2);
+  assert.equal(state.idle_rounds, 2);
+  assert.equal(state.stop_reason, 'idle');
+  assert.deepEqual(state.seen_candidate_hashes, ['hash-1', 'hash-2']);
+  assert.deepEqual(calls.slice(0, 8), [
+    ['expand', 3],
+    ['sleep', 1],
+    ['capture', 'batch_0001', false, 0],
+    ['scroll', 0.55],
+    ['sleep', 1],
+    ['expand', 3],
+    ['sleep', 1],
+    ['capture', 'batch_0002', false, 1]
+  ]);
+  assert.deepEqual(calls.slice(-2), [
+    ['pageClose', false],
+    ['sessionClose']
+  ]);
+});
+
 test('capture_comment_candidate_batches_until_idle writes batches until consecutive empty batches', async () => {
   const tools = require(toolsPath);
   const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));

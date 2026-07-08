@@ -24,29 +24,29 @@ python src/pipeline/import_bilibili_delivery.py \
 For each `runs/<task_id>/task.json`:
 
 1. Open the task URL in the logged-in browser.
-2. Use the comment-crawler MCP to expand comments and replies.
-3. Save the raw payload if a fallback/debug copy is needed.
-4. Capture one bounded candidate batch with `capture_comment_candidate_batch`:
+2. Use `expand_and_capture_comment_batches` as the default comment browser step. It expands visible replies, captures DOM candidates before scrolling, saves bounded batches, and stops after idle or configured limits:
 
 ```text
 {
   "outDir": "output/<project_id>/runs/<task_id>",
   "taskId": "<task_id>",
-  "batchId": "batch_0001",
+  "maxRuntimeMs": 1800000,
+  "maxRounds": 800,
+  "maxBatches": 300,
+  "maxIdleRounds": 8,
+  "maxClicksPerRound": 3,
   "maxCandidates": 80,
   "maxCharsPerCandidate": 2500,
   "includeHtml": true,
   "includeText": true,
-  "scrollAfterCapture": true,
-  "scrollStepRatio": 0.85,
-  "closePageAfter": false
+  "closePageAfter": true
 }
 ```
 
-5. Repeat batch capture into `batches/<batch_id>/comment-dom-batch.json` until the page produces no new candidates or the task is judged complete. On the final MCP page call for this task, pass `closePageAfter: true` so the selected Chrome tab closes before the next task opens.
-6. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
-7. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
-8. Normalize each batch:
+3. Use `capture-state.json` to confirm the generated batch range. The tool writes `batches/<batch_id>/comment-dom-batch.json` for non-empty batches.
+4. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
+5. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
+6. Normalize each batch:
 
 ```bash
 node script/normalize-ai-comment-extraction.js \
@@ -56,14 +56,18 @@ node script/normalize-ai-comment-extraction.js \
   --out output/<project_id>/runs/<task_id>/batches/<batch_id>/normalized-comments.jsonl
 ```
 
-9. Merge task batches:
+7. Merge task batches:
 
 ```bash
 python src/pipeline/merge_task_batches.py \
   --task-dir output/<project_id>/runs/<task_id>
 ```
 
-Use `comment-dom-snapshot.json` and `prompts/comment-dom-extraction.md` only as a small-page fallback or debug path.
+Fallback/debug path:
+
+- Use `expand_current_page_comments` only when you need the legacy raw payload for comparison.
+- Use `capture_comment_candidate_batch` or `capture_comment_candidate_batches_until_idle` only when manually controlling capture batches.
+- Use `comment-dom-snapshot.json` and `prompts/comment-dom-extraction.md` only as a small-page fallback or debug path.
 
 ## 3. Merge, QA, And Build Excel
 

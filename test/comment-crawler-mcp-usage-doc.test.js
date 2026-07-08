@@ -11,6 +11,7 @@ test('MCP usage documentation describes the batch candidate workflow', () => {
   const doc = fs.readFileSync(docPath, 'utf8');
 
   for (const requiredText of [
+    'expand_and_capture_comment_batches',
     'capture_comment_candidate_batch',
     'capture_comment_candidate_batches_until_idle',
     'comment-dom-batch.json',

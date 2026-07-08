@@ -31,6 +31,7 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
             self.assertIn(command, workflow)
 
         for batch_text in [
+            "expand_and_capture_comment_batches",
             "capture_comment_candidate_batch",
             "comment-candidate-batch-extraction.md",
             "comment-dom-batch.json",

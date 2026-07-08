@@ -19,7 +19,21 @@ const NORMALIZE_TOOL_NAME = 'normalize_comment_run';
 const CAPTURE_DOM_TOOL_NAME = 'capture_current_comment_dom_snapshot';
 const CAPTURE_CANDIDATE_BATCH_TOOL_NAME = 'capture_comment_candidate_batch';
 const CAPTURE_CANDIDATE_BATCHES_TOOL_NAME = 'capture_comment_candidate_batches_until_idle';
+const EXPAND_CAPTURE_TOOL_NAME = 'expand_and_capture_comment_batches';
 const DEFAULT_EXPAND_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_EXPAND_CAPTURE_CONFIG = Object.freeze({
+  maxRuntimeMs: 30 * 60 * 1000,
+  maxRounds: 800,
+  maxBatches: 300,
+  maxIdleRounds: 8,
+  maxClicksPerRound: 3,
+  expandWaitMsMin: 1000,
+  expandWaitMsMax: 1800,
+  scrollWaitMsMin: 1500,
+  scrollWaitMsMax: 2500,
+  scrollStepRatioMin: 0.55,
+  scrollStepRatioMax: 0.7
+});
 
 function resolveProjectRoot(options = {}) {
   return path.resolve(options.projectRoot || path.join(__dirname, '..'));
@@ -429,14 +443,142 @@ function listTools() {
         },
         required: ['status', 'runId', 'outDir', 'stateFile', 'platform', 'url', 'taskId', 'batchCount', 'candidateCount', 'stopReason', 'lastBatchId', 'nextBatchId', 'batchFiles']
       }
+    },
+    {
+      name: EXPAND_CAPTURE_TOOL_NAME,
+      title: 'Expand And Capture Comment Batches',
+      description: 'Main coverage workflow: expand visible replies, capture current DOM candidates before scrolling, save bounded batches, and stop after idle or configured limits.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          cdpEndpoint: {
+            type: 'string',
+            description: 'Chrome DevTools Protocol endpoint. Defaults to http://127.0.0.1:9222.'
+          },
+          connectTimeoutMs: {
+            type: 'number',
+            description: 'Timeout for connecting to Chrome CDP.'
+          },
+          outDir: {
+            type: 'string',
+            description: 'Task output directory under project output.'
+          },
+          runId: {
+            type: 'string',
+            description: 'Optional run id when outDir is omitted.'
+          },
+          taskId: {
+            type: 'string',
+            description: 'Task id written into each batch file.'
+          },
+          stateFile: {
+            type: 'string',
+            description: 'Optional capture state path under project output. Defaults to <outDir>/capture-state.json.'
+          },
+          maxRuntimeMs: {
+            type: 'number',
+            description: 'Maximum runtime before stopping. Defaults to 1800000ms.'
+          },
+          maxRounds: {
+            type: 'number',
+            description: 'Maximum expand/capture/scroll rounds. Defaults to 800.'
+          },
+          maxBatches: {
+            type: 'number',
+            description: 'Maximum non-empty batch files to write. Defaults to 300.'
+          },
+          maxIdleRounds: {
+            type: 'number',
+            description: 'Stop after this many rounds without new candidates, clicks, or scroll progress. Defaults to 8.'
+          },
+          maxClicksPerRound: {
+            type: 'number',
+            description: 'Maximum visible expand buttons clicked in each round. Defaults to 3.'
+          },
+          expandWaitMsMin: {
+            type: 'number',
+            description: 'Minimum wait after expand clicks.'
+          },
+          expandWaitMsMax: {
+            type: 'number',
+            description: 'Maximum wait after expand clicks.'
+          },
+          scrollWaitMsMin: {
+            type: 'number',
+            description: 'Minimum wait after scrolling.'
+          },
+          scrollWaitMsMax: {
+            type: 'number',
+            description: 'Maximum wait after scrolling.'
+          },
+          scrollStepRatioMin: {
+            type: 'number',
+            description: 'Minimum scroll step as a ratio of viewport height.'
+          },
+          scrollStepRatioMax: {
+            type: 'number',
+            description: 'Maximum scroll step as a ratio of viewport height.'
+          },
+          maxCandidates: {
+            type: 'number',
+            description: 'Maximum candidates captured in each non-empty batch.'
+          },
+          maxCharsPerCandidate: {
+            type: 'number',
+            description: 'Maximum text/html characters per candidate.'
+          },
+          includeHtml: {
+            type: 'boolean',
+            description: 'Whether to include sanitized local HTML for AI extraction.'
+          },
+          includeText: {
+            type: 'boolean',
+            description: 'Whether to include visible text for AI extraction.'
+          },
+          closePageAfter: {
+            type: 'boolean',
+            description: 'Close the selected Chrome tab after the loop stops.'
+          }
+        },
+        additionalProperties: false
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+          runId: { type: 'string' },
+          outDir: { type: 'string' },
+          stateFile: { type: 'string' },
+          platform: { type: 'string' },
+          url: { type: 'string' },
+          taskId: { type: 'string' },
+          stopReason: { type: 'string' },
+          roundCount: { type: 'number' },
+          batchCount: { type: 'number' },
+          candidateCount: { type: 'number' },
+          totalClicks: { type: 'number' },
+          totalErrors: { type: 'number' },
+          idleRounds: { type: 'number' },
+          lastBatchId: { type: 'string' },
+          nextBatchId: { type: 'string' },
+          batchFiles: {
+            type: 'array',
+            items: { type: 'string' }
+          },
+          closedPage: { type: 'boolean' },
+          closePageError: { type: 'string' }
+        },
+        required: ['status', 'runId', 'outDir', 'stateFile', 'platform', 'url', 'taskId', 'stopReason', 'roundCount', 'batchCount', 'candidateCount', 'totalClicks', 'totalErrors', 'idleRounds', 'lastBatchId', 'nextBatchId', 'batchFiles']
+      }
     }
   ];
 
   const priority = [
     STATUS_TOOL_NAME,
+    EXPAND_CAPTURE_TOOL_NAME,
     EXPAND_TOOL_NAME,
-    CAPTURE_CANDIDATE_BATCH_TOOL_NAME,
     CAPTURE_DOM_TOOL_NAME,
+    CAPTURE_CANDIDATE_BATCH_TOOL_NAME,
     CAPTURE_CANDIDATE_BATCHES_TOOL_NAME,
     SAVE_TOOL_NAME,
     NORMALIZE_TOOL_NAME
@@ -602,6 +744,255 @@ function toPositiveInteger(value, fallback) {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
   return parsed;
+}
+
+function normalizeRange(minValue, maxValue, fallbackMin, fallbackMax) {
+  const parsedMin = Number(minValue);
+  const parsedMax = Number(maxValue);
+  const min = Number.isFinite(parsedMin) && parsedMin >= 0 ? parsedMin : fallbackMin;
+  const max = Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : fallbackMax;
+
+  return min <= max
+    ? { min, max }
+    : { min: max, max: min };
+}
+
+function pickRangeValue(range, random = Math.random) {
+  if (!range || range.min === range.max) return range ? range.min : 0;
+  return Math.round(range.min + (range.max - range.min) * random());
+}
+
+function pickRatioValue(range, random = Math.random) {
+  if (!range || range.min === range.max) return range ? range.min : 0;
+  return range.min + (range.max - range.min) * random();
+}
+
+function normalizeExpandCaptureConfig(args = {}) {
+  return {
+    maxRuntimeMs: toPositiveInteger(args.maxRuntimeMs, DEFAULT_EXPAND_CAPTURE_CONFIG.maxRuntimeMs),
+    maxRounds: toPositiveInteger(args.maxRounds, DEFAULT_EXPAND_CAPTURE_CONFIG.maxRounds),
+    maxBatches: toPositiveInteger(args.maxBatches, DEFAULT_EXPAND_CAPTURE_CONFIG.maxBatches),
+    maxIdleRounds: toPositiveInteger(args.maxIdleRounds, DEFAULT_EXPAND_CAPTURE_CONFIG.maxIdleRounds),
+    maxClicksPerRound: toPositiveInteger(args.maxClicksPerRound, DEFAULT_EXPAND_CAPTURE_CONFIG.maxClicksPerRound),
+    expandWaitMs: normalizeRange(
+      args.expandWaitMsMin,
+      args.expandWaitMsMax,
+      DEFAULT_EXPAND_CAPTURE_CONFIG.expandWaitMsMin,
+      DEFAULT_EXPAND_CAPTURE_CONFIG.expandWaitMsMax
+    ),
+    scrollWaitMs: normalizeRange(
+      args.scrollWaitMsMin,
+      args.scrollWaitMsMax,
+      DEFAULT_EXPAND_CAPTURE_CONFIG.scrollWaitMsMin,
+      DEFAULT_EXPAND_CAPTURE_CONFIG.scrollWaitMsMax
+    ),
+    scrollStepRatio: normalizeRange(
+      args.scrollStepRatioMin,
+      args.scrollStepRatioMax,
+      DEFAULT_EXPAND_CAPTURE_CONFIG.scrollStepRatioMin,
+      DEFAULT_EXPAND_CAPTURE_CONFIG.scrollStepRatioMax
+    )
+  };
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function expandVisibleCommentsOnce(page, options = {}) {
+  const maxClicksPerRound = toPositiveInteger(options.maxClicksPerRound, DEFAULT_EXPAND_CAPTURE_CONFIG.maxClicksPerRound);
+
+  return page.evaluate(config => {
+    const normalizeText = value => String(value == null ? '' : value).replace(/\s+/g, '').trim();
+    const patterns = [
+      /^展开更多(?:回复|评论)?$/,
+      /^展开(?:全部)?\d+条?回复$/,
+      /^展开\d+回复$/,
+      /^查看(?:全部|更多)?\d+条?回复$/,
+      /^查看(?:全部|更多)?回复$/,
+      /^查看更多回复$/,
+      /^更多回复$/
+    ];
+    const rejectPatterns = [
+      /展开全文/,
+      /收起/,
+      /商品/,
+      /详情/
+    ];
+    const isExpandText = value => {
+      const text = normalizeText(value);
+      if (!text || text.length > 24) return false;
+      if (rejectPatterns.some(pattern => pattern.test(text))) return false;
+      return patterns.some(pattern => pattern.test(text));
+    };
+    const isVisible = el => {
+      if (!el) return false;
+      if (el.disabled) return false;
+      if (String(el.getAttribute && el.getAttribute('aria-disabled')) === 'true') return false;
+      if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false;
+      const rect = typeof el.getBoundingClientRect === 'function'
+        ? el.getBoundingClientRect()
+        : null;
+      if (rect && (rect.width <= 0 || rect.height <= 0)) return false;
+      if (el.offsetParent === null && (!rect || (rect.width === 0 && rect.height === 0))) return false;
+      const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      if (style && (
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.pointerEvents === 'none' ||
+        Number(style.opacity) === 0
+      )) {
+        return false;
+      }
+      return true;
+    };
+    const hasMatchingDescendant = el => {
+      if (!el || typeof el.querySelectorAll !== 'function') return false;
+      return Array.from(el.querySelectorAll('*')).some(child => child !== el && isVisible(child) && isExpandText(child.textContent));
+    };
+    const candidates = [];
+
+    for (const el of Array.from(document.querySelectorAll('button,[role="button"],a,span,div'))) {
+      if (candidates.length >= config.maxClicksPerRound) break;
+      if (!isVisible(el)) continue;
+      if (!isExpandText(el.textContent)) continue;
+      if (hasMatchingDescendant(el)) continue;
+      candidates.push(el);
+    }
+
+    let clicked = 0;
+    let errors = 0;
+
+    for (const el of candidates) {
+      try {
+        if (typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ block: 'center', inline: 'center' });
+        }
+        if (typeof el.click === 'function') {
+          el.click();
+          clicked += 1;
+        }
+      } catch (_error) {
+        errors += 1;
+      }
+    }
+
+    return {
+      clicked,
+      errors,
+      available: candidates.length
+    };
+  }, {
+    maxClicksPerRound
+  });
+}
+
+async function scrollCommentContainer(page, options = {}) {
+  const parsedRatio = Number(options.scrollStepRatio);
+  const scrollStepRatio = Number.isFinite(parsedRatio) && parsedRatio > 0 ? parsedRatio : DEFAULT_EXPAND_CAPTURE_CONFIG.scrollStepRatioMin;
+
+  return page.evaluate(config => {
+    const isVisible = el => {
+      if (!el) return false;
+      const rect = typeof el.getBoundingClientRect === 'function'
+        ? el.getBoundingClientRect()
+        : null;
+      if (rect && (rect.width <= 0 || rect.height <= 0)) return false;
+      if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false;
+      return true;
+    };
+    const scoreScrollContainer = el => {
+      if (!el || !isVisible(el)) return 0;
+      const scrollHeight = Number(el.scrollHeight) || 0;
+      const clientHeight = Number(el.clientHeight) || 0;
+      const overflow = scrollHeight - clientHeight;
+      if (overflow <= 40 || clientHeight < 120) return 0;
+      const marker = `${el.id || ''} ${el.className || ''}`.toLowerCase();
+      let score = overflow;
+      if (/comment|reply|评论|回复/.test(marker)) score += 1000;
+      if (/list|panel|content|container|drawer|modal/.test(marker)) score += 150;
+      if (clientHeight >= 240) score += 100;
+      return score;
+    };
+    const fallback = document.scrollingElement || document.documentElement || document.body;
+    const selector = [
+      '[class*="comment"]',
+      '[class*="reply"]',
+      '[class*="Comment"]',
+      '[class*="Reply"]',
+      'section',
+      'main',
+      'aside',
+      'div',
+      'ul',
+      'ol'
+    ].join(',');
+    let target = fallback;
+    let bestScore = scoreScrollContainer(fallback);
+
+    for (const el of Array.from(document.querySelectorAll(selector))) {
+      const score = scoreScrollContainer(el);
+      if (score > bestScore) {
+        target = el;
+        bestScore = score;
+      }
+    }
+
+    const isWindowTarget = target === document.body || target === document.documentElement || target === document.scrollingElement;
+    const getTop = () => isWindowTarget
+      ? Number(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0)
+      : Number(target.scrollTop || 0);
+    const clientHeight = Number(target && target.clientHeight) || Number(window.innerHeight) || 800;
+    const step = Math.max(240, Math.round(clientHeight * config.scrollStepRatio));
+    const before = getTop();
+
+    if (isWindowTarget) {
+      window.scrollBy({ top: step, left: 0, behavior: 'auto' });
+    } else {
+      target.scrollTop = Math.min(Math.max(0, Number(target.scrollHeight || 0) - clientHeight), before + step);
+      try {
+        target.dispatchEvent(new Event('scroll', { bubbles: true }));
+      } catch (_error) {
+        // Best effort event nudge for virtualized lists.
+      }
+    }
+
+    const after = getTop();
+    const maxTop = isWindowTarget
+      ? Math.max(0, Number(document.documentElement.scrollHeight || document.body.scrollHeight || 0) - Number(window.innerHeight || clientHeight))
+      : Math.max(0, Number(target.scrollHeight || 0) - clientHeight);
+
+    return {
+      before,
+      after,
+      changed: after !== before,
+      atBottom: maxTop > 0 && after >= maxTop - 8,
+      viewportHeight: Number(window.innerHeight || clientHeight) || 0,
+      documentHeight: Math.max(
+        Number(document.body && document.body.scrollHeight) || 0,
+        Number(document.documentElement && document.documentElement.scrollHeight) || 0
+      )
+    };
+  }, {
+    scrollStepRatio
+  });
+}
+
+function decorateCaptureState(state, progress) {
+  return Object.assign({}, state || {}, {
+    schema_version: 'capture-state-v1',
+    task_id: progress.taskId,
+    platform: progress.platform,
+    source_url: progress.sourceUrl,
+    updated_at: new Date().toISOString(),
+    last_batch_id: progress.lastBatchId,
+    next_batch_id: progress.nextBatchId,
+    round: progress.roundCount,
+    total_clicks: progress.totalClicks,
+    total_candidates: progress.candidateCount,
+    idle_rounds: progress.idleRounds,
+    stop_reason: progress.stopReason || ''
+  });
 }
 
 async function expandCurrentPageComments(args = {}, context = {}) {
@@ -979,6 +1370,189 @@ async function captureCurrentCommentCandidateBatchesUntilIdle(args = {}, context
   }
 }
 
+async function expandAndCaptureCommentBatches(args = {}, context = {}) {
+  const projectRoot = resolveProjectRoot(context);
+  const connectToCdp = context.connectToCdp || cdp.connectToCdp;
+  const session = await connectToCdp({
+    cdpEndpoint: args.cdpEndpoint,
+    timeoutMs: Number.isFinite(Number(args.connectTimeoutMs))
+      ? Number(args.connectTimeoutMs)
+      : cdp.DEFAULT_CDP_TIMEOUT_MS,
+    playwright: context.playwright
+  });
+
+  try {
+    const page = session.page;
+    const sourceUrl = getPageUrl(page);
+    security.assertAllowedPageUrl(sourceUrl, context.allowedHosts);
+
+    const runId = args.runId || runner.createRunId();
+    const outDir = security.resolveOutputPath(
+      projectRoot,
+      args.outDir || path.join('output', runId)
+    );
+    const stateFile = security.resolveOutputPath(
+      projectRoot,
+      args.stateFile || path.join(outDir, 'capture-state.json')
+    );
+    const config = normalizeExpandCaptureConfig(args);
+    const random = typeof context.random === 'function' ? context.random : Math.random;
+    const wait = context.sleep || sleep;
+    const expandStep = context.expandVisibleCommentsOnce || expandVisibleCommentsOnce;
+    const captureBatch = context.captureCommentCandidateBatch || candidateBatch.captureCommentCandidateBatch;
+    const scrollStep = context.scrollCommentContainer || scrollCommentContainer;
+    const platform = detectPlatformSafe(sourceUrl);
+    let previousState = readCaptureState(stateFile);
+    const taskId = String(args.taskId || previousState.task_id || runId);
+    const startedAt = Date.now();
+    const existingBatches = Array.isArray(previousState.batches) ? previousState.batches : [];
+    const batchFiles = existingBatches.map(batch => String(batch && batch.batch_file || '')).filter(Boolean);
+    let roundCount = Number(previousState.round) || 0;
+    let batchCount = existingBatches.length;
+    let candidateCount = Number(previousState.total_candidates) || 0;
+    let totalClicks = Number(previousState.total_clicks) || 0;
+    let totalErrors = Number(previousState.total_errors) || 0;
+    let idleRounds = Number(previousState.idle_rounds) || 0;
+    let lastBatchId = String(previousState.last_batch_id || '');
+    let nextBatchId = resolveBatchId({}, previousState);
+    let stopReason = '';
+
+    fs.mkdirSync(outDir, { recursive: true });
+
+    while (!stopReason) {
+      if (Date.now() - startedAt >= config.maxRuntimeMs) {
+        stopReason = 'max-runtime';
+        break;
+      }
+      if (roundCount >= config.maxRounds) {
+        stopReason = 'max-rounds';
+        break;
+      }
+      if (batchCount >= config.maxBatches) {
+        stopReason = 'max-batches';
+        break;
+      }
+
+      roundCount += 1;
+
+      const expandResult = await expandStep(page, {
+        maxClicksPerRound: config.maxClicksPerRound
+      });
+      const clickedThisRound = Number(expandResult && expandResult.clicked) || 0;
+      totalClicks += clickedThisRound;
+      totalErrors += Number(expandResult && expandResult.errors) || 0;
+
+      await wait(pickRangeValue(config.expandWaitMs, random));
+
+      const batchId = resolveBatchId({}, previousState);
+      const batchDir = path.join(outDir, 'batches', batchId);
+      const batchFile = path.join(batchDir, 'comment-dom-batch.json');
+      const batch = await captureBatch(page, {
+        taskId,
+        batchId,
+        platform,
+        sourceUrl,
+        maxCandidates: args.maxCandidates,
+        maxCharsPerCandidate: args.maxCharsPerCandidate,
+        includeHtml: args.includeHtml,
+        includeText: args.includeText,
+        scrollAfterCapture: false,
+        seenCandidateHashes: getSeenCandidateHashes(previousState)
+      });
+      const currentCandidates = Array.isArray(batch && batch.candidates) ? batch.candidates.length : 0;
+
+      if (currentCandidates > 0) {
+        nextBatchId = buildNextBatchId(batchId);
+        fs.mkdirSync(batchDir, { recursive: true });
+        output.writeJson(batchFile, batch);
+        batchFiles.push(batchFile);
+        previousState = updateCaptureState({
+          previousState,
+          taskId,
+          platform: batch.platform || platform,
+          sourceUrl: batch.source_url || sourceUrl,
+          batchId,
+          nextBatchId,
+          batch,
+          batchFile
+        });
+        batchCount += 1;
+        candidateCount += currentCandidates;
+        lastBatchId = batchId;
+      } else {
+        nextBatchId = resolveBatchId({}, previousState);
+      }
+
+      const scrollRatio = pickRatioValue(config.scrollStepRatio, random);
+      const scrollResult = await scrollStep(page, {
+        scrollStepRatio: scrollRatio
+      });
+
+      await wait(pickRangeValue(config.scrollWaitMs, random));
+
+      const progressed = currentCandidates > 0 || clickedThisRound > 0 || Boolean(scrollResult && scrollResult.changed);
+      idleRounds = progressed ? 0 : idleRounds + 1;
+
+      if (idleRounds >= config.maxIdleRounds) {
+        stopReason = 'idle';
+      } else if (batchCount >= config.maxBatches) {
+        stopReason = 'max-batches';
+      } else if (roundCount >= config.maxRounds) {
+        stopReason = 'max-rounds';
+      } else if (Date.now() - startedAt >= config.maxRuntimeMs) {
+        stopReason = 'max-runtime';
+      } else if (Boolean(scrollResult && scrollResult.atBottom) && idleRounds >= config.maxIdleRounds) {
+        stopReason = 'bottom-idle';
+      }
+
+      previousState = decorateCaptureState(previousState, {
+        taskId,
+        platform,
+        sourceUrl,
+        lastBatchId,
+        nextBatchId,
+        roundCount,
+        totalClicks,
+        candidateCount,
+        idleRounds,
+        stopReason,
+        totalErrors
+      });
+      previousState.total_errors = totalErrors;
+      output.writeJson(stateFile, previousState);
+    }
+
+    const result = {
+      status: 'success',
+      runId,
+      outDir,
+      stateFile,
+      platform,
+      url: sourceUrl,
+      taskId,
+      stopReason,
+      roundCount,
+      batchCount,
+      candidateCount,
+      totalClicks,
+      totalErrors,
+      idleRounds,
+      lastBatchId,
+      nextBatchId,
+      batchFiles
+    };
+    const closeResult = await closePageIfRequested(page, args);
+    return {
+      ...result,
+      ...closeResult
+    };
+  } finally {
+    if (session && typeof session.close === 'function') {
+      await session.close();
+    }
+  }
+}
+
 async function callTool(name, args = {}, context = {}) {
   if (name === STATUS_TOOL_NAME) {
     return buildToolResult(getCommentCrawlerStatus({
@@ -1010,6 +1584,10 @@ async function callTool(name, args = {}, context = {}) {
     return buildToolResult(await captureCurrentCommentCandidateBatchesUntilIdle(args, context));
   }
 
+  if (name === EXPAND_CAPTURE_TOOL_NAME) {
+    return buildToolResult(await expandAndCaptureCommentBatches(args, context));
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 }
 
@@ -1022,7 +1600,9 @@ module.exports = {
   CAPTURE_DOM_TOOL_NAME,
   CAPTURE_CANDIDATE_BATCH_TOOL_NAME,
   CAPTURE_CANDIDATE_BATCHES_TOOL_NAME,
+  EXPAND_CAPTURE_TOOL_NAME,
   DEFAULT_EXPAND_TIMEOUT_MS,
+  DEFAULT_EXPAND_CAPTURE_CONFIG,
   getCommentCrawlerStatus,
   listTools,
   buildToolResult,
@@ -1036,6 +1616,10 @@ module.exports = {
   buildNextBatchId,
   updateCaptureState,
   toPositiveInteger,
+  normalizeExpandCaptureConfig,
+  expandVisibleCommentsOnce,
+  scrollCommentContainer,
+  decorateCaptureState,
   buildExpandSummary,
   expandCurrentPageComments,
   readCurrentPagePayload,
@@ -1044,5 +1628,6 @@ module.exports = {
   captureCurrentCommentDomSnapshot,
   captureCurrentCommentCandidateBatch,
   captureCurrentCommentCandidateBatchesUntilIdle,
+  expandAndCaptureCommentBatches,
   callTool
 };

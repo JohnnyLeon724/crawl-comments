@@ -10,7 +10,7 @@ Use this skill to run the local semi-automated comment delivery pipeline in this
 The split of responsibility is fixed:
 
 - Scripts parse Excel, normalize JSON, merge runs, QA, resume, and generate workbooks.
-- MCP/browser tools only expand comments, scroll, and capture bounded DOM candidate batches.
+- MCP/browser tools expand comments, scroll, and capture bounded DOM candidate batches. The default browser step is `expand_and_capture_comment_batches`.
 - AI reads DOM candidate batches and produces structured comment JSON that matches the project schema.
 
 Before executing a project, read [references/workflow.md](references/workflow.md). It contains the command order, artifact names, and acceptance checks.
@@ -41,4 +41,4 @@ Before executing a project, read [references/workflow.md](references/workflow.md
 - `resume-plan.json` when resuming
 - `delivery.xlsx`
 
-`comment-dom-snapshot.json` remains a fallback artifact for small pages or debugging, but the default path is candidate batch capture.
+`comment-dom-snapshot.json` and the old expand-then-capture path remain fallback artifacts for small pages or debugging, but the default path is `expand_and_capture_comment_batches`.

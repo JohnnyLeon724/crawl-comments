@@ -147,6 +147,38 @@ test('skips candidates already present in seen hashes', () => {
   assert.equal(next.state.has_more, false);
 });
 
+test('prefers nested comment leaf candidates over broad parent containers', () => {
+  const parent = makeElement({
+    className: 'comment-container',
+    text: '用户A 第一条评论 3月前 江苏 用户B 第二条评论 2月前 广东',
+    rect: { top: 100, height: 300 }
+  });
+  const first = makeElement({
+    className: 'comment-item',
+    text: '用户A 第一条评论 3月前 江苏',
+    parentElement: parent,
+    rect: { top: 120, height: 80 }
+  });
+  const second = makeElement({
+    className: 'comment-item',
+    text: '用户B 第二条评论 2月前 广东',
+    parentElement: parent,
+    rect: { top: 220, height: 80 }
+  });
+
+  const batch = candidates.buildCommentDomBatchFromElements([parent, first, second], {
+    taskId: 'task_0001',
+    batchId: 'batch_0001',
+    viewportHeight: 900
+  });
+
+  assert.equal(batch.candidates.length, 2);
+  assert.deepEqual(batch.candidates.map(candidate => candidate.inner_text), [
+    '用户A 第一条评论 3月前 江苏',
+    '用户B 第二条评论 2月前 广东'
+  ]);
+});
+
 test('normalizes candidate options to safe defaults', () => {
   assert.deepEqual(candidates.normalizeCandidateOptions({
     maxCandidates: -1,
