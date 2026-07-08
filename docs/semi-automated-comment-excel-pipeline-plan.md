@@ -177,7 +177,7 @@ output/<project_id>/
 ### 4.1 项目初始化
 
 ```bash
-node script/parse-client-requirements.js \
+python script/parse_client_requirements.py \
   --input "docs/米其林评论区分析KOL link-0630.xlsx" \
   --phase "KOL link-0630" \
   --out-dir output/michelin_kol_0630
@@ -240,7 +240,7 @@ node script/normalize-ai-comment-extraction.js \
 ### 4.5 项目级合并与 Excel 生成
 
 ```bash
-node script/build-client-comment-excel.js \
+python script/build_client_comment_excel.py \
   --project-dir output/michelin_kol_0630 \
   --template docs/michelin_kol_comments_all_platforms_0630.xlsx \
   --out output/michelin_kol_0630/delivery.xlsx
@@ -253,30 +253,31 @@ node script/build-client-comment-excel.js \
 | 阶段 | 状态 | 任务 | 收益 | 成本 | 交付物 | 验收标准 |
 |---|---|---|---:|---:|---|---|
 | 0 | 已完成 | 明确半自动边界 | 很高 | 低 | 本文档方向 | 脚本管确定性，AI 管理解，MCP 管页面动作 |
-| 1 | 待开始 | 客户需求表解析 | 很高 | 低 | `parse-client-requirements.js`、`crawl-tasks.json` | 能从客户表生成任务，链接清洗正确 |
+| 1 | 待开始 | 客户需求表解析 | 很高 | 低 | `parse_client_requirements.py`、`crawl-tasks.json` | 能从客户表生成任务，链接清洗正确 |
 | 2 | 待开始 | 任务运行目录规范 | 高 | 低 | `task.json`、`run-manifest.json` | 每条任务有独立目录和状态 |
 | 3 | 已完成 | MCP DOM snapshot | 很高 | 已投入 | `comment-dom-snapshot.json` | 当前页面可保存 bounded DOM chunks |
 | 4 | 已完成 | AI DOM 结构化契约 | 很高 | 已投入 | prompt + schema | AI 输出 rows/rejected 且可引用 chunk |
 | 5 | 待开始 | 归一化携带客户上下文 | 很高 | 中 | 增强 `normalized-comments.jsonl` | 每条评论能回溯到客户表行和任务 |
 | 6 | 待开始 | 项目级合并脚本 | 高 | 低 | `all-normalized-comments.jsonl` | 多任务评论可合并、去重、保序 |
-| 7 | 待开始 | 交付 Excel 生成器 | 很高 | 中 | `delivery.xlsx` | 生成 `汇总`、`阶段汇总`、`评论明细` |
-| 8 | 待开始 | QA 与差异标记 | 高 | 中 | `qa-summary.json`、Excel 状态列 | 识别 `ok/partial/failed` 和数量差异 |
-| 9 | 待开始 | 批量断点续跑 | 高 | 中 | `resume` 工作流 | 失败任务可重跑，不覆盖已完成任务 |
-| 10 | 待开始 | B站字段兼容 | 中 | 中 | B站 adapter 映射 | 兼容 `bilibili_comments_all_phases.xlsx` 的字段习惯 |
-| 11 | 待开始 | 沉淀为 Codex skill | 中高 | 低 | `comment-excel-delivery` skill | Codex 可按固定流程处理新客户表 |
+| 7 | 待开始 | 交付 Excel 生成器 | 很高 | 中 | `build_client_comment_excel.py`、`delivery.xlsx` | 生成 `汇总`、`阶段汇总`、`评论明细` |
+| 8 | 待开始 | 项目结构解耦与仓库瘦身 | 高 | 中 | 分层目录、归档目录、清理清单 | 脚本、测试、文档、样例数据分类清楚，删除或归档非必须文件 |
+| 9 | 待开始 | QA 与差异标记 | 高 | 中 | `qa-summary.json`、Excel 状态列 | 识别 `ok/partial/failed` 和数量差异 |
+| 10 | 待开始 | 批量断点续跑 | 高 | 中 | `resume` 工作流 | 失败任务可重跑，不覆盖已完成任务 |
+| 11 | 待开始 | B站字段兼容 | 中 | 中 | B站 adapter 映射 | 兼容 `bilibili_comments_all_phases.xlsx` 的字段习惯 |
+| 12 | 待开始 | 沉淀为 Codex skill | 中高 | 低 | `comment-excel-delivery` skill | Codex 可按固定流程处理新客户表 |
 
 ## 6. 第一轮开发范围
 
 第一轮只做确定性脚本，不碰新的浏览器自动化。
 
-1. `parse-client-requirements.js`
+1. `parse_client_requirements.py`
    - 读取客户需求表。
    - 清洗链接文本。
    - 标准化平台名。
    - 输出 `crawl-tasks.json`。
 2. `schemas/crawl-task.schema.json`
    - 固化任务字段。
-3. `build-client-comment-excel.js` 的最小版本
+3. `build_client_comment_excel.py` 的最小版本
    - 输入已有 `normalized-comments.jsonl` 和任务上下文。
    - 输出三张表结构。
 4. 单元测试
@@ -286,7 +287,90 @@ node script/build-client-comment-excel.js \
 
 第一轮验收不要求真实抓取新评论，只要求能把“已有归一化评论 + 客户任务上下文”整理成标准交付 Excel。
 
-## 7. QA 规则
+## 7. 项目结构解耦与清理原则
+
+随着任务解析、MCP、AI 结构化、Excel 交付、QA 和 skill 化逐步增加，继续把所有脚本放在 `script/`、所有测试放在 `test/` 会很快失控。
+
+结构整理不应在第一天做大搬家，但必须在交付 Excel 闭环跑通后、批量断点续跑前完成。否则后续新增平台、模板和测试时会越来越难维护。
+
+### 7.1 目标结构
+
+建议逐步演进为：
+
+```text
+src/
+  browser/
+    expand-comments-v1.js
+  mcp/
+    comment-crawler-server.js
+    comment-crawler-tools.js
+    comment-crawler-dom-snapshot.js
+  pipeline/
+    parse_client_requirements.py
+    merge_comment_runs.py
+    qa_comment_delivery.py
+    build_client_comment_excel.py
+  normalize/
+    normalize-ai-comment-extraction.js
+    normalize-comments.js
+  adapters/
+    douyin.js
+    xiaohongshu.js
+
+tests/
+  mcp/
+  pipeline/
+  normalize/
+  adapters/
+  fixtures/
+
+docs/
+  active/
+  archive/
+  handoff/
+  examples/
+
+schemas/
+  crawl-task.schema.json
+  comment-dom-snapshot.schema.json
+  ai-comment-extraction.schema.json
+
+prompts/
+  comment-dom-extraction.md
+```
+
+第一版可以保留旧路径兼容入口，例如 `script/normalize-ai-comment-extraction.js` 继续存在，但内部转调新位置，避免已有命令立即失效。
+
+### 7.2 清理范围
+
+清理要分三类处理：
+
+| 类型 | 处理方式 | 示例 |
+|---|---|---|
+| 当前仍被命令或测试引用 | 保留，必要时迁移并留下兼容入口 | MCP server、归一化脚本、schema |
+| 已完成但仍有参考价值 | 移入 `docs/archive/` 或 `docs/examples/` | 旧演进计划、历史 handoff、样例交付说明 |
+| 无引用、重复、临时调试文件 | 删除 | 临时测试输出、重复 fixture、过期手工脚本 |
+
+删除前必须做引用检查：
+
+```bash
+rg "文件名或核心函数名"
+```
+
+测试文件不按“写完功能就删”的方式处理。只有当测试覆盖重复、目标代码已删除、或测试只验证旧行为且会误导维护时，才合并或删除；删除测试前必须有替代测试覆盖同一风险。
+
+### 7.3 验收标准
+
+项目结构阶段完成时应满足：
+
+1. 核心入口有清晰目录归属：浏览器、MCP、pipeline、normalize、adapters。
+2. 测试目录按模块分类，不再全部堆在单层 `test/`。
+3. 文档分为 active、archive、handoff、examples。
+4. 非必须文件有清理清单，说明删除或归档原因。
+5. 旧命令仍可运行，或在文档中明确替代命令。
+6. 全量测试通过。
+
+## 8. QA 规则
 
 每条任务生成 QA 结果：
 
@@ -302,7 +386,7 @@ node script/build-client-comment-excel.js \
 
 Excel 中至少保留任务状态和备注；详细 QA 可以放在 `qa-summary.json`，后续需要时再加隐藏工作表。
 
-## 8. Skill 化方案
+## 9. Skill 化方案
 
 最终工作流适合整理成 Codex skill，但不建议第一天就做。
 
@@ -348,7 +432,7 @@ Skill 只保存流程和判断标准，不复制项目脚本：
 根据客户需求表生成评论明细和汇总表
 ```
 
-## 9. 风险与取舍
+## 10. 风险与取舍
 
 | 风险 | 影响 | 应对 |
 |---|---|---|
@@ -358,8 +442,10 @@ Skill 只保存流程和判断标准，不复制项目脚本：
 | 客户表格式变化 | 解析失败 | 第一版支持固定模板，后续加字段别名 |
 | 多平台字段差异 | Excel 格式不统一 | 统一交付字段，平台特有字段放 raw/备注 |
 | 直接全自动批跑触发异常 | 成功率低 | 第一版保持半自动串行，可人工介入 |
+| 过早大规模重构目录 | 影响已有命令和测试 | 先跑通交付闭环，再迁移；保留兼容入口 |
+| 删除历史文件导致追溯断层 | 难以解释旧决策 | 优先归档，确认无引用和无价值后再删除 |
 
-## 10. 推荐执行顺序
+## 11. 推荐执行顺序
 
 下一步按以下顺序开发：
 
@@ -367,7 +453,7 @@ Skill 只保存流程和判断标准，不复制项目脚本：
 2. 实现项目运行目录和任务 manifest。
 3. 增强 AI 归一化结果，使评论行带客户任务上下文。
 4. 实现标准交付 Excel 生成器。
-5. 用 `docs/米其林评论区分析KOL link-0630.xlsx` 和已有交付表做回归对照。
-6. 跑一条抖音和一条小红书真实任务，验证从 DOM snapshot 到 Excel 的闭环。
-7. 两次真实交付稳定后，再创建 `comment-excel-delivery` skill。
-
+5. 做项目结构解耦与仓库瘦身，保留旧入口兼容。
+6. 用 `docs/米其林评论区分析KOL link-0630.xlsx` 和已有交付表做回归对照。
+7. 跑一条抖音和一条小红书真实任务，验证从 DOM snapshot 到 Excel 的闭环。
+8. 两次真实交付稳定后，再创建 `comment-excel-delivery` skill。
