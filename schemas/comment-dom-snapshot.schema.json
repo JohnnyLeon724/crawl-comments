@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.comment-crawler/schemas/comment-dom-snapshot.schema.json",
+  "title": "Comment DOM Snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "platform",
+    "source_url",
+    "captured_at",
+    "limits",
+    "chunks"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "comment-dom-snapshot-v1"
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["douyin", "xiaohongshu", "unknown"]
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "captured_at": {
+      "type": "string"
+    },
+    "expander_state": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxChunks", "maxCharsPerChunk"],
+      "properties": {
+        "maxChunks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxCharsPerChunk": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "chunk_id",
+          "dom_path",
+          "role_hint",
+          "inner_text",
+          "html",
+          "nearby_buttons",
+          "captured_at"
+        ],
+        "properties": {
+          "chunk_id": {
+            "type": "string"
+          },
+          "dom_path": {
+            "type": "string"
+          },
+          "role_hint": {
+            "type": "string",
+            "enum": ["comment_candidate", "comment_region", "unknown"]
+          },
+          "inner_text": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "nearby_buttons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parent_chunk_id": {
+            "type": "string"
+          },
+          "captured_at": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
