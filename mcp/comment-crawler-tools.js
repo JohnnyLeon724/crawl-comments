@@ -34,6 +34,17 @@ const DEFAULT_EXPAND_CAPTURE_CONFIG = Object.freeze({
   scrollStepRatioMin: 0.55,
   scrollStepRatioMax: 0.7
 });
+const DEFAULT_CLICK_PROFILE = Object.freeze({
+  clickMode: 'coordinate',
+  fallbackClickMode: 'dom-click',
+  clickJitterPx: 4,
+  mouseMoveStepsMin: 4,
+  mouseMoveStepsMax: 9,
+  clickDownMsMin: 60,
+  clickDownMsMax: 160,
+  clickGapMsMin: 300,
+  clickGapMsMax: 900
+});
 
 function resolveProjectRoot(options = {}) {
   return path.resolve(options.projectRoot || path.join(__dirname, '..'));
@@ -746,6 +757,13 @@ function toPositiveInteger(value, fallback) {
   return parsed;
 }
 
+function toNonNegativeInteger(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  if (parsed < 0) return 0;
+  return parsed;
+}
+
 function normalizeRange(minValue, maxValue, fallbackMin, fallbackMax) {
   const parsedMin = Number(minValue);
   const parsedMax = Number(maxValue);
@@ -755,6 +773,38 @@ function normalizeRange(minValue, maxValue, fallbackMin, fallbackMax) {
   return min <= max
     ? { min, max }
     : { min: max, max: min };
+}
+
+function normalizeClickMode(value, fallback) {
+  const mode = String(value || '').trim();
+  if (mode === 'coordinate' || mode === 'dom-click' || mode === 'auto') return mode;
+  return fallback;
+}
+
+function normalizeClickProfile(args = {}) {
+  return {
+    clickMode: normalizeClickMode(args.clickMode, DEFAULT_CLICK_PROFILE.clickMode),
+    fallbackClickMode: normalizeClickMode(args.fallbackClickMode, DEFAULT_CLICK_PROFILE.fallbackClickMode),
+    clickJitterPx: toNonNegativeInteger(args.clickJitterPx, DEFAULT_CLICK_PROFILE.clickJitterPx),
+    mouseMoveSteps: normalizeRange(
+      args.mouseMoveStepsMin,
+      args.mouseMoveStepsMax,
+      DEFAULT_CLICK_PROFILE.mouseMoveStepsMin,
+      DEFAULT_CLICK_PROFILE.mouseMoveStepsMax
+    ),
+    clickDownMs: normalizeRange(
+      args.clickDownMsMin,
+      args.clickDownMsMax,
+      DEFAULT_CLICK_PROFILE.clickDownMsMin,
+      DEFAULT_CLICK_PROFILE.clickDownMsMax
+    ),
+    clickGapMs: normalizeRange(
+      args.clickGapMsMin,
+      args.clickGapMsMax,
+      DEFAULT_CLICK_PROFILE.clickGapMsMin,
+      DEFAULT_CLICK_PROFILE.clickGapMsMax
+    )
+  };
 }
 
 function pickRangeValue(range, random = Math.random) {
@@ -791,7 +841,8 @@ function normalizeExpandCaptureConfig(args = {}) {
       args.scrollStepRatioMax,
       DEFAULT_EXPAND_CAPTURE_CONFIG.scrollStepRatioMin,
       DEFAULT_EXPAND_CAPTURE_CONFIG.scrollStepRatioMax
-    )
+    ),
+    click: normalizeClickProfile(args)
   };
 }
 
@@ -1603,6 +1654,7 @@ module.exports = {
   EXPAND_CAPTURE_TOOL_NAME,
   DEFAULT_EXPAND_TIMEOUT_MS,
   DEFAULT_EXPAND_CAPTURE_CONFIG,
+  DEFAULT_CLICK_PROFILE,
   getCommentCrawlerStatus,
   listTools,
   buildToolResult,
@@ -1616,6 +1668,9 @@ module.exports = {
   buildNextBatchId,
   updateCaptureState,
   toPositiveInteger,
+  toNonNegativeInteger,
+  normalizeClickMode,
+  normalizeClickProfile,
   normalizeExpandCaptureConfig,
   expandVisibleCommentsOnce,
   scrollCommentContainer,

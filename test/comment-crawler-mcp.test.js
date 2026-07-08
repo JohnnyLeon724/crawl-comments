@@ -336,6 +336,46 @@ test('stage 4 exposes expand_current_page_comments through JSON-RPC tools/call',
   assert.equal(response.result.structuredContent.rawCommentCount, 1);
 });
 
+test('normalizes coordinate click configuration with safe defaults and clamped ranges', () => {
+  const tools = require(toolsPath);
+
+  assert.equal(tools.normalizeClickMode('coordinate', 'dom-click'), 'coordinate');
+  assert.equal(tools.normalizeClickMode('dom-click', 'coordinate'), 'dom-click');
+  assert.equal(tools.normalizeClickMode('auto', 'coordinate'), 'auto');
+  assert.equal(tools.normalizeClickMode('missing', 'coordinate'), 'coordinate');
+
+  const profile = tools.normalizeClickProfile({
+    clickMode: 'coordinate',
+    fallbackClickMode: 'dom-click',
+    clickJitterPx: -9,
+    mouseMoveStepsMin: 12,
+    mouseMoveStepsMax: 4,
+    clickDownMsMin: 200,
+    clickDownMsMax: 60,
+    clickGapMsMin: 900,
+    clickGapMsMax: 300
+  });
+
+  assert.deepEqual(profile, {
+    clickMode: 'coordinate',
+    fallbackClickMode: 'dom-click',
+    clickJitterPx: 0,
+    mouseMoveSteps: { min: 4, max: 12 },
+    clickDownMs: { min: 60, max: 200 },
+    clickGapMs: { min: 300, max: 900 }
+  });
+
+  const config = tools.normalizeExpandCaptureConfig({
+    clickMode: 'auto',
+    fallbackClickMode: 'dom-click',
+    clickJitterPx: 3
+  });
+
+  assert.equal(config.click.clickMode, 'auto');
+  assert.equal(config.click.fallbackClickMode, 'dom-click');
+  assert.equal(config.click.clickJitterPx, 3);
+});
+
 test('stage 5 saves the current page comment payload to CLI-compatible output files', async () => {
   assert.equal(fs.existsSync(outputPath), true);
 
