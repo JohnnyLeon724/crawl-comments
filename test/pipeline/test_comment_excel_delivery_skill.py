@@ -21,12 +21,22 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
         for command in [
             "parse_client_requirements.py",
             "import_bilibili_delivery.py",
+            "merge_task_batches.py",
             "merge_comment_runs.py",
             "qa_comment_delivery.py",
             "build_client_comment_excel.py",
             "resume_comment_project.py",
         ]:
             self.assertIn(command, workflow)
+
+        for batch_text in [
+            "capture_comment_candidate_batch",
+            "comment-candidate-batch-extraction.md",
+            "comment-dom-batch.json",
+            "--batch",
+            "batches/<batch_id>",
+        ]:
+            self.assertIn(batch_text, workflow)
 
         self.assertTrue(re.search(r"display_name:\s*\"Comment Excel Delivery\"", agent_yaml))
 

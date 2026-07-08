@@ -26,16 +26,44 @@ For each `runs/<task_id>/task.json`:
 1. Open the task URL in the logged-in browser.
 2. Use the comment-crawler MCP to expand comments and replies.
 3. Save the raw payload if a fallback/debug copy is needed.
-4. Capture `comment-dom-snapshot.json`. On the final MCP call for this task, pass `closePageAfter: true` so the selected Chrome tab closes before the next task opens.
-5. Read `prompts/comment-dom-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
-6. Have AI output `ai-comment-extraction.json`.
-7. Normalize:
+4. Capture one bounded candidate batch with `capture_comment_candidate_batch`:
+
+```text
+{
+  "outDir": "output/<project_id>/runs/<task_id>",
+  "taskId": "<task_id>",
+  "batchId": "batch_0001",
+  "maxCandidates": 80,
+  "maxCharsPerCandidate": 2500,
+  "includeHtml": true,
+  "includeText": true,
+  "scrollAfterCapture": true,
+  "scrollStepRatio": 0.85,
+  "closePageAfter": false
+}
+```
+
+5. Repeat batch capture into `batches/<batch_id>/comment-dom-batch.json` until the page produces no new candidates or the task is judged complete. On the final MCP page call for this task, pass `closePageAfter: true` so the selected Chrome tab closes before the next task opens.
+6. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
+7. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
+8. Normalize each batch:
 
 ```bash
 node script/normalize-ai-comment-extraction.js \
-  --run-dir output/<project_id>/runs/<task_id> \
-  --task output/<project_id>/runs/<task_id>/task.json
+  --input output/<project_id>/runs/<task_id>/batches/<batch_id>/ai-comment-extraction.json \
+  --batch output/<project_id>/runs/<task_id>/batches/<batch_id>/comment-dom-batch.json \
+  --task output/<project_id>/runs/<task_id>/task.json \
+  --out output/<project_id>/runs/<task_id>/batches/<batch_id>/normalized-comments.jsonl
 ```
+
+9. Merge task batches:
+
+```bash
+python src/pipeline/merge_task_batches.py \
+  --task-dir output/<project_id>/runs/<task_id>
+```
+
+Use `comment-dom-snapshot.json` and `prompts/comment-dom-extraction.md` only as a small-page fallback or debug path.
 
 ## 3. Merge, QA, And Build Excel
 
