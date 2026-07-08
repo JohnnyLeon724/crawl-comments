@@ -83,6 +83,14 @@ python src/pipeline/qa_comment_delivery.py \
   --out output/<project_id>/qa-summary.json
 ```
 
+Generate batch summary for locating failed or unfinished batches:
+
+```bash
+python src/pipeline/build_batch_summary.py \
+  --project-dir output/<project_id> \
+  --out output/<project_id>/batch-summary.json
+```
+
 Generate the client workbook:
 
 ```bash

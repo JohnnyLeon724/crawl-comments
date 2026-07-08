@@ -37,6 +37,7 @@ Before executing a project, read [references/workflow.md](references/workflow.md
 - `runs/<task_id>/batch-merge-summary.json`
 - `all-normalized-comments.jsonl`
 - `qa-summary.json`
+- `batch-summary.json`
 - `resume-plan.json` when resuming
 - `delivery.xlsx`
 

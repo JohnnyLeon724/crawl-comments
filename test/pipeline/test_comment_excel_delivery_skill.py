@@ -24,6 +24,7 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
             "merge_task_batches.py",
             "merge_comment_runs.py",
             "qa_comment_delivery.py",
+            "build_batch_summary.py",
             "build_client_comment_excel.py",
             "resume_comment_project.py",
         ]:
