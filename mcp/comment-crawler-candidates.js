@@ -1,0 +1,241 @@
+'use strict';
+
+const crypto = require('node:crypto');
+
+const DEFAULT_MAX_CANDIDATES = 80;
+const DEFAULT_MAX_CHARS_PER_CANDIDATE = 2500;
+
+function toPositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function toNonNegativeNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function normalizeCandidateOptions(options = {}) {
+  return {
+    taskId: options.taskId || '',
+    batchId: options.batchId || '',
+    platform: options.platform || 'unknown',
+    sourceUrl: options.sourceUrl || '',
+    maxCandidates: toPositiveInteger(options.maxCandidates, DEFAULT_MAX_CANDIDATES),
+    maxCharsPerCandidate: toPositiveInteger(options.maxCharsPerCandidate, DEFAULT_MAX_CHARS_PER_CANDIDATE),
+    includeHtml: options.includeHtml !== false,
+    includeText: options.includeText !== false,
+    viewportHeight: toNonNegativeNumber(options.viewportHeight),
+    documentHeight: toNonNegativeNumber(options.documentHeight),
+    beforeTop: toNonNegativeNumber(options.beforeTop),
+    afterTop: toNonNegativeNumber(options.afterTop),
+    seenCandidateHashes: Array.isArray(options.seenCandidateHashes)
+      ? options.seenCandidateHashes.map(value => String(value))
+      : []
+  };
+}
+
+function cleanText(value) {
+  return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
+}
+
+function stripUnsafeHtml(value) {
+  return cleanText(value)
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/gi, '')
+    .replace(/<canvas\b[^>]*>[\s\S]*?<\/canvas>/gi, '')
+    .replace(/<video\b[^>]*>[\s\S]*?<\/video>/gi, '')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isNoiseText(value) {
+  const text = cleanText(value);
+  if (!text) return true;
+
+  return [
+    /沪ICP备|营业执照|公网安备|增值电信业务|违法不良信息|互联网药品信息服务/,
+    /©\s*2014-2026|电话：?9501-3888|地址：?上海市黄浦区/,
+    /00:00.*倍速|2K\s*高帧率|1080P\s*高清|请刷新试试/,
+    /精选推荐搜索关注|下载抖音|内容由AI生成|章节要点/,
+    /播放\s*\d{2}:\d{2}.*全屏/
+  ].some(pattern => pattern.test(text));
+}
+
+function getElementMarker(el) {
+  if (!el) return '';
+
+  return [
+    el.id || '',
+    el.className || '',
+    el.getAttribute && el.getAttribute('data-e2e') || '',
+    el.getAttribute && el.getAttribute('data-testid') || '',
+    el.getAttribute && el.getAttribute('aria-label') || ''
+  ].join(' ').toLowerCase();
+}
+
+function getRoleHint(el) {
+  const marker = getElementMarker(el);
+  if (/reply|回复/.test(marker)) return 'reply_candidate';
+  if (/comment|评论/.test(marker)) return 'comment_candidate';
+  return 'unknown';
+}
+
+function getDomPath(el, maxDepth = 8) {
+  const parts = [];
+  let current = el;
+
+  while (current && current.nodeType !== 9 && parts.length < maxDepth) {
+    const tagName = current.tagName || 'NODE';
+    let index = 1;
+    let prev = current.previousElementSibling;
+
+    while (prev) {
+      if (prev.tagName === tagName) index += 1;
+      prev = prev.previousElementSibling;
+    }
+
+    parts.unshift(`${tagName}:nth-of-type(${index})`);
+    current = current.parentElement;
+  }
+
+  return parts.join('>');
+}
+
+function getNearbyButtons(el) {
+  if (!el || typeof el.querySelectorAll !== 'function') return [];
+
+  return Array.from(el.querySelectorAll('button,[role="button"],a'))
+    .map(button => cleanText(button.textContent))
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function getRect(el) {
+  if (!el || typeof el.getBoundingClientRect !== 'function') {
+    return { top: 0, left: 0, width: 0, height: 0 };
+  }
+
+  const rect = el.getBoundingClientRect();
+  return {
+    top: Number(rect.top) || 0,
+    left: Number(rect.left) || 0,
+    width: Number(rect.width) || 0,
+    height: Number(rect.height) || 0
+  };
+}
+
+function isVisibleRect(rect, viewportHeight) {
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  if (!viewportHeight) return true;
+  return rect.top + rect.height >= 0 && rect.top <= viewportHeight;
+}
+
+function buildCandidateHash(input) {
+  const basis = [
+    cleanText(input.roleHint || ''),
+    cleanText(input.innerText || '').slice(0, 500)
+  ].join('::');
+  return crypto.createHash('sha1').update(basis).digest('hex');
+}
+
+function isCandidateElement(el, options) {
+  if (!el) return false;
+  const rect = getRect(el);
+  if (!isVisibleRect(rect, options.viewportHeight)) return false;
+
+  const text = cleanText(el.innerText || el.textContent);
+  if (isNoiseText(text)) return false;
+
+  const roleHint = getRoleHint(el);
+  return roleHint === 'comment_candidate' || roleHint === 'reply_candidate';
+}
+
+function buildCommentDomBatchFromElements(elements, options = {}) {
+  const normalized = normalizeCandidateOptions(options);
+  const capturedAt = options.capturedAt || new Date().toISOString();
+  const seen = new Set(normalized.seenCandidateHashes);
+  const candidates = [];
+  let eligibleUnseenCount = 0;
+
+  for (const el of Array.from(elements || [])) {
+    if (!isCandidateElement(el, normalized)) continue;
+
+    const roleHint = getRoleHint(el);
+    const innerText = normalized.includeText
+      ? cleanText(el.innerText || el.textContent).slice(0, normalized.maxCharsPerCandidate)
+      : '';
+    const html = normalized.includeHtml
+      ? stripUnsafeHtml(el.outerHTML || '').slice(0, normalized.maxCharsPerCandidate)
+      : '';
+    const candidateHash = buildCandidateHash({
+      roleHint,
+      innerText: cleanText(el.innerText || el.textContent)
+    });
+
+    if (!innerText && !html) continue;
+    if (seen.has(candidateHash)) continue;
+
+    eligibleUnseenCount += 1;
+    if (candidates.length >= normalized.maxCandidates) continue;
+
+    seen.add(candidateHash);
+    candidates.push({
+      candidate_id: `candidate_${String(candidates.length + 1).padStart(6, '0')}`,
+      candidate_hash: candidateHash,
+      dom_path: getDomPath(el),
+      role_hint: roleHint,
+      inner_text: innerText,
+      html,
+      nearby_buttons: getNearbyButtons(el),
+      rect: getRect(el),
+      captured_at: capturedAt
+    });
+  }
+
+  return {
+    schema_version: 'comment-dom-batch-v1',
+    batch_id: normalized.batchId,
+    task_id: normalized.taskId,
+    platform: normalized.platform,
+    source_url: normalized.sourceUrl,
+    captured_at: capturedAt,
+    scroll: {
+      before_top: normalized.beforeTop,
+      after_top: normalized.afterTop,
+      viewport_height: normalized.viewportHeight,
+      document_height: normalized.documentHeight
+    },
+    state: {
+      new_candidate_count: candidates.length,
+      seen_candidate_count: seen.size,
+      has_more: eligibleUnseenCount > candidates.length,
+      stop_reason: eligibleUnseenCount > candidates.length ? 'max_candidates' : ''
+    },
+    limits: {
+      maxCandidates: normalized.maxCandidates,
+      maxCharsPerCandidate: normalized.maxCharsPerCandidate
+    },
+    candidates
+  };
+}
+
+module.exports = {
+  DEFAULT_MAX_CANDIDATES,
+  DEFAULT_MAX_CHARS_PER_CANDIDATE,
+  toPositiveInteger,
+  normalizeCandidateOptions,
+  cleanText,
+  stripUnsafeHtml,
+  isNoiseText,
+  getRoleHint,
+  getDomPath,
+  getRect,
+  isVisibleRect,
+  buildCandidateHash,
+  buildCommentDomBatchFromElements
+};
