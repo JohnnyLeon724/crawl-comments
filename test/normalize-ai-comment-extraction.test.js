@@ -48,6 +48,20 @@ test('parses explicit task context path', () => {
   assert.equal(args.task, 'task.json');
 });
 
+test('parses explicit batch snapshot path', () => {
+  const args = normalizer.parseArgs([
+    '--input',
+    'ai-comment-extraction.json',
+    '--batch',
+    'comment-dom-batch.json',
+    '--out',
+    'normalized-comments.jsonl'
+  ]);
+
+  assert.equal(args.batch, 'comment-dom-batch.json');
+  assert.equal(args.snapshot, '');
+});
+
 test('normalizes AI extracted rows into existing comment row shape', () => {
   const extraction = {
     schema_version: 'ai-comment-extraction-v1',
@@ -119,6 +133,58 @@ test('normalizes AI extracted rows into existing comment row shape', () => {
   assert.equal(rows[0].source_excel_row, 8);
   assert.equal(rows[0].creator_name, '不劳累');
   assert.equal(rows[0].raw.task.expected_comment_count, 49);
+});
+
+test('normalizes AI rows against comment DOM batch candidates', () => {
+  const extraction = {
+    schema_version: 'ai-comment-extraction-v1',
+    source_url: 'https://www.douyin.com/video/7624758376937969290',
+    platform: 'douyin',
+    rows: [
+      {
+        source_chunk_id: 'candidate_000001',
+        row_type: 'level1',
+        user_name: 'Klaus｜胡萝卜',
+        text: '255 55 19选竞驰5E还是浩悦5E啊？',
+        created_at: '3月前',
+        ip_location: '江苏',
+        like_count: 2,
+        reply_to_user_name: '',
+        root_text: '',
+        is_pinned: false,
+        is_author: false,
+        confidence: 'high',
+        evidence: 'Klaus｜胡萝卜...255 55 19选竞驰5E还是浩悦5E啊？3月前·江苏2分享'
+      }
+    ],
+    rejected: []
+  };
+  const batch = {
+    schema_version: 'comment-dom-batch-v1',
+    batch_id: 'batch_0001',
+    candidates: [
+      {
+        candidate_id: 'candidate_000001',
+        candidate_hash: 'hash-1',
+        inner_text: 'Klaus｜胡萝卜...255 55 19选竞驰5E还是浩悦5E啊？3月前·江苏2分享'
+      }
+    ]
+  };
+
+  const firstBatchRows = normalizer.normalizeAiExtraction(extraction, {
+    snapshot: batch,
+    platform: 'douyin'
+  });
+  const secondBatchRows = normalizer.normalizeAiExtraction(extraction, {
+    snapshot: Object.assign({}, batch, { batch_id: 'batch_0002' }),
+    platform: 'douyin'
+  });
+
+  assert.equal(firstBatchRows.length, 1);
+  assert.equal(firstBatchRows[0].raw.source_batch_id, 'batch_0001');
+  assert.equal(firstBatchRows[0].raw.source_candidate_id, 'candidate_000001');
+  assert.equal(firstBatchRows[0].raw.source_chunk.inner_text, batch.candidates[0].inner_text);
+  assert.notEqual(firstBatchRows[0].row_key, secondBatchRows[0].row_key);
 });
 
 test('normalizes an AI extraction file and writes JSONL output', () => {
@@ -193,4 +259,63 @@ test('normalizes an AI extraction file and writes JSONL output', () => {
   assert.equal(rows[0].source_excel_row, 2);
   assert.equal(rows[0].raw.snapshot_file, snapshotPath);
   assert.equal(rows[0].raw.task.creator_name, 'DJ初仔大朋友');
+});
+
+test('normalizes an AI extraction file with a batch input', () => {
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-ai-batch-normalize-'));
+  const extractionPath = path.join(runDir, 'ai-comment-extraction.json');
+  const batchPath = path.join(runDir, 'comment-dom-batch.json');
+  const outPath = path.join(runDir, 'normalized-comments.jsonl');
+
+  fs.writeFileSync(extractionPath, `${JSON.stringify({
+    schema_version: 'ai-comment-extraction-v1',
+    source_url: 'https://www.xiaohongshu.com/explore/69ce1e1d000000001a036d9b',
+    platform: 'xiaohongshu',
+    rows: [
+      {
+        source_chunk_id: 'candidate_000001',
+        row_type: 'level1',
+        user_name: '托马斯',
+        text: '这是我用到现在最好的轮胎',
+        created_at: '04-04',
+        ip_location: '上海',
+        like_count: 24,
+        reply_to_user_name: '',
+        root_text: '',
+        is_pinned: true,
+        is_author: false,
+        confidence: 'high',
+        evidence: '托马斯这是我用到现在最好的轮胎置顶评论04-04上海24'
+      }
+    ],
+    rejected: []
+  }, null, 2)}\n`);
+  fs.writeFileSync(batchPath, `${JSON.stringify({
+    schema_version: 'comment-dom-batch-v1',
+    batch_id: 'batch_0007',
+    candidates: [
+      {
+        candidate_id: 'candidate_000001',
+        inner_text: '托马斯这是我用到现在最好的轮胎置顶评论04-04上海24'
+      }
+    ]
+  }, null, 2)}\n`);
+
+  const summary = normalizer.normalizeFile({
+    input: extractionPath,
+    batch: batchPath,
+    out: outPath
+  });
+
+  assert.equal(summary.status, 'success');
+  assert.equal(summary.rowCount, 1);
+  assert.equal(summary.batch, batchPath);
+
+  const rows = fs.readFileSync(outPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+  assert.equal(rows[0].raw.source_batch_id, 'batch_0007');
+  assert.equal(rows[0].raw.source_candidate_id, 'candidate_000001');
+  assert.equal(rows[0].raw.snapshot_file, batchPath);
 });

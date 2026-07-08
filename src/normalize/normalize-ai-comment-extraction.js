@@ -13,11 +13,13 @@ function printUsage() {
 用法：
   node script/normalize-ai-comment-extraction.js --run-dir output/run_001 --platform douyin
   node script/normalize-ai-comment-extraction.js --input ai-comment-extraction.json --snapshot comment-dom-snapshot.json --out normalized-comments.jsonl --platform douyin
+  node script/normalize-ai-comment-extraction.js --input ai-comment-extraction.json --batch comment-dom-batch.json --out normalized-comments.jsonl
 
 参数：
   --run-dir     可选，自动推导 ai-comment-extraction.json、comment-dom-snapshot.json、normalized-comments.jsonl
   --input       可选，AI 结构化输出 JSON；未使用 --run-dir 时必填
   --snapshot    可选，DOM snapshot JSON；未使用 --run-dir 时建议提供
+  --batch       可选，DOM candidate batch JSON；与 --snapshot 二选一
   --task        可选，客户任务上下文 JSON；使用 --run-dir 时默认读取 task.json
   --out         可选，normalized-comments.jsonl 输出路径；未使用 --run-dir 时必填
   --platform    可选，douyin 或 xiaohongshu；未传时读取 AI 输出 platform
@@ -39,6 +41,7 @@ function parseArgs(argv) {
     runDir: '',
     input: '',
     snapshot: '',
+    batch: '',
     task: '',
     out: '',
     platform: '',
@@ -68,6 +71,12 @@ function parseArgs(argv) {
 
     if (token === '--snapshot') {
       args.snapshot = readFlagValue(argv, i, token);
+      i += 1;
+      continue;
+    }
+
+    if (token === '--batch') {
+      args.batch = readFlagValue(argv, i, token);
       i += 1;
       continue;
     }
@@ -138,12 +147,23 @@ function extractPostId(platform, sourceUrl) {
 function buildChunkMap(snapshot) {
   const map = new Map();
   const chunks = Array.isArray(snapshot && snapshot.chunks) ? snapshot.chunks : [];
+  const candidates = Array.isArray(snapshot && snapshot.candidates) ? snapshot.candidates : [];
 
   for (const chunk of chunks) {
     if (chunk && chunk.chunk_id) map.set(String(chunk.chunk_id), chunk);
   }
 
+  for (const candidate of candidates) {
+    if (candidate && candidate.candidate_id) map.set(String(candidate.candidate_id), candidate);
+  }
+
   return map;
+}
+
+function getSnapshotBatchId(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return '';
+  if (snapshot.schema_version !== 'comment-dom-batch-v1') return '';
+  return normalizeSpaces(snapshot.batch_id);
 }
 
 function normalizeTaskContext(task) {
@@ -170,14 +190,17 @@ function normalizeAiRow(row, options) {
   const rowType = row.row_type === 'level2' ? 'level2' : 'level1';
   const userName = normalizeSpaces(row.user_name);
   const sourceChunkId = normalizeSpaces(row.source_chunk_id);
-  const rowKey = buildRowKey([
+  const keyParts = [
     platform,
     sourceUrl,
     rowType,
     sourceChunkId,
     userName,
     text
-  ]);
+  ];
+  const sourceBatchId = normalizeSpaces(options.sourceBatchId);
+  if (sourceBatchId) keyParts.push(sourceBatchId);
+  const rowKey = buildRowKey(keyParts);
   const sourceChunk = options.chunkMap.get(sourceChunkId) || null;
   const taskContext = normalizeTaskContext(options.task);
   const rawTask = options.task && typeof options.task === 'object'
@@ -211,6 +234,8 @@ function normalizeAiRow(row, options) {
       ai_row: Object.assign({}, row),
       task: rawTask,
       source_chunk: sourceChunk,
+      source_batch_id: sourceBatchId,
+      source_candidate_id: sourceBatchId ? sourceChunkId : '',
       snapshot_file: options.snapshotFile || ''
     }
   };
@@ -219,7 +244,9 @@ function normalizeAiRow(row, options) {
 function normalizeAiExtraction(extraction, options = {}) {
   const platform = options.platform || extraction.platform || 'unknown';
   const sourceUrl = options.sourceUrl || extraction.source_url || '';
-  const chunkMap = buildChunkMap(options.snapshot || {});
+  const snapshot = options.snapshot || {};
+  const chunkMap = buildChunkMap(snapshot);
+  const sourceBatchId = options.sourceBatchId || getSnapshotBatchId(snapshot);
   const seen = new Set();
   const rows = [];
 
@@ -229,7 +256,8 @@ function normalizeAiExtraction(extraction, options = {}) {
       sourceUrl,
       chunkMap,
       task: options.task || null,
-      snapshotFile: options.snapshotFile || ''
+      snapshotFile: options.snapshotFile || '',
+      sourceBatchId
     });
     if (!row || seen.has(row.row_key)) continue;
     seen.add(row.row_key);
@@ -250,15 +278,16 @@ function readJson(filePath) {
 
 function normalizeFile(args) {
   const extraction = readJson(args.input);
-  const snapshot = args.snapshot && fs.existsSync(args.snapshot)
-    ? readJson(args.snapshot)
+  const sourceDomFile = args.batch || args.snapshot || '';
+  const snapshot = sourceDomFile && fs.existsSync(sourceDomFile)
+    ? readJson(sourceDomFile)
     : {};
   const task = args.task && fs.existsSync(args.task)
     ? readJson(args.task)
     : null;
   const rows = normalizeAiExtraction(extraction, {
     snapshot,
-    snapshotFile: args.snapshot || '',
+    snapshotFile: sourceDomFile,
     task,
     platform: args.platform || extraction.platform || '',
     sourceUrl: args.sourceUrl || extraction.source_url || ''
@@ -272,6 +301,7 @@ function normalizeFile(args) {
     platform: args.platform || extraction.platform || 'unknown',
     input: args.input,
     snapshot: args.snapshot || '',
+    batch: args.batch || '',
     task: args.task || '',
     out: args.out,
     rowCount: rows.length,
@@ -314,6 +344,7 @@ module.exports = {
   buildRowKey,
   extractPostId,
   buildChunkMap,
+  getSnapshotBatchId,
   normalizeAiRow,
   normalizeAiExtraction,
   rowsToJsonl,
