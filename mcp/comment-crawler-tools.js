@@ -7,6 +7,7 @@ const runner = require('../script/crawl-comments-playwright.js');
 const normalizer = require('../script/normalize-comments.js');
 const cdp = require('./comment-crawler-cdp.js');
 const output = require('./comment-crawler-output.js');
+const security = require('./comment-crawler-security.js');
 
 const MCP_VERSION = 'mcp-v1';
 const STATUS_TOOL_NAME = 'get_comment_crawler_status';
@@ -238,6 +239,8 @@ async function expandCurrentPageComments(args = {}, context = {}) {
 
   try {
     const page = session.page;
+    security.assertAllowedPageUrl(getPageUrl(page), context.allowedHosts);
+
     const expanderScript = context.expanderScript || readExpanderScript(projectRoot);
     const timeoutMs = Number.isFinite(Number(args.timeoutMs))
       ? Number(args.timeoutMs)
@@ -276,6 +279,7 @@ async function readCurrentPagePayload(page) {
 }
 
 async function saveCurrentPageComments(args = {}, context = {}) {
+  const projectRoot = resolveProjectRoot(context);
   const connectToCdp = context.connectToCdp || cdp.connectToCdp;
   const session = await connectToCdp({
     cdpEndpoint: args.cdpEndpoint,
@@ -288,13 +292,21 @@ async function saveCurrentPageComments(args = {}, context = {}) {
   try {
     const page = session.page;
     const payload = await readCurrentPagePayload(page);
+    const sourceUrl = payload.source_url || getPageUrl(page);
+    security.assertAllowedPageUrl(sourceUrl, context.allowedHosts);
+
+    const runId = args.runId || runner.createRunId();
+    const outDir = security.resolveOutputPath(
+      projectRoot,
+      args.outDir || path.join('output', runId)
+    );
 
     return output.writeCommentRunOutput({
       payload,
       page,
-      sourceUrl: payload.source_url || getPageUrl(page),
-      outDir: args.outDir,
-      runId: args.runId
+      sourceUrl,
+      outDir,
+      runId
     });
   } finally {
     if (session && typeof session.close === 'function') {
@@ -303,7 +315,7 @@ async function saveCurrentPageComments(args = {}, context = {}) {
   }
 }
 
-function normalizeCommentRun(args = {}) {
+function normalizeCommentRun(args = {}, context = {}) {
   if (!args.runDir) {
     throw new Error('normalize_comment_run 需要 runDir');
   }
@@ -312,9 +324,14 @@ function normalizeCommentRun(args = {}) {
     throw new Error('normalize_comment_run 需要 platform');
   }
 
+  const projectRoot = resolveProjectRoot(context);
+  const runDir = security.resolveOutputPath(projectRoot, args.runDir);
+
   return normalizer.normalizeFile({
-    input: path.join(args.runDir, 'raw-comments.json'),
-    out: args.out || path.join(args.runDir, 'normalized-comments.jsonl'),
+    input: path.join(runDir, 'raw-comments.json'),
+    out: args.out
+      ? security.resolveOutputPath(projectRoot, args.out)
+      : path.join(runDir, 'normalized-comments.jsonl'),
     platform: args.platform,
     sourceUrl: args.sourceUrl || ''
   });

@@ -10,6 +10,7 @@ const toolsPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-tools.js');
 const serverPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-server.js');
 const cdpPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-cdp.js');
 const outputPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-output.js');
+const securityPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-security.js');
 
 test('stage 2 exposes a comment crawler status tool', async () => {
   assert.equal(fs.existsSync(toolsPath), true);
@@ -302,7 +303,8 @@ test('stage 5 saves the current page comment payload to CLI-compatible output fi
   assert.equal(fs.existsSync(outputPath), true);
 
   const tools = require(toolsPath);
-  const outDir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-run-')), 'run_001');
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const outDir = path.join(projectRoot, 'output', 'run_001');
   const calls = [];
   const payload = {
     state: {
@@ -353,7 +355,7 @@ test('stage 5 saves the current page comment payload to CLI-compatible output fi
         close: async () => calls.push(['close'])
       };
     },
-    projectRoot: '/tmp/comment-crawler-demo'
+    projectRoot
   });
 
   assert.equal(result.isError, false);
@@ -393,7 +395,9 @@ test('stage 5 saves the current page comment payload to CLI-compatible output fi
 
 test('stage 6 normalizes a saved comment run through the MCP tool', async () => {
   const tools = require(toolsPath);
-  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-normalize-'));
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const runDir = path.join(projectRoot, 'output', 'run_001');
+  fs.mkdirSync(runDir, { recursive: true });
   fs.writeFileSync(path.join(runDir, 'raw-comments.json'), `${JSON.stringify({
     source_url: 'https://www.douyin.com/video/123',
     results: [
@@ -410,7 +414,7 @@ test('stage 6 normalizes a saved comment run through the MCP tool', async () => 
     runDir,
     platform: 'douyin'
   }, {
-    projectRoot: '/tmp/comment-crawler-demo'
+    projectRoot
   });
 
   assert.equal(result.isError, false);
@@ -429,4 +433,36 @@ test('stage 6 normalizes a saved comment run through the MCP tool', async () => 
   assert.equal(normalized[0].post_id, '123');
   assert.equal(normalized[0].user_name, '用户A');
   assert.equal(normalized[0].text, '第一条评论');
+});
+
+test('stage 7 enforces project output paths and supported platform hosts', () => {
+  assert.equal(fs.existsSync(securityPath), true);
+
+  const security = require(securityPath);
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+
+  assert.equal(
+    security.resolveOutputPath(projectRoot, 'output/run_001'),
+    path.join(projectRoot, 'output', 'run_001')
+  );
+  assert.equal(
+    security.resolveOutputPath(projectRoot, path.join(projectRoot, 'output', 'run_002')),
+    path.join(projectRoot, 'output', 'run_002')
+  );
+  assert.throws(
+    () => security.resolveOutputPath(projectRoot, path.join(projectRoot, 'not-output', 'run')),
+    /output/
+  );
+  assert.throws(
+    () => security.resolveOutputPath(projectRoot, path.join(os.tmpdir(), 'outside-run')),
+    /output/
+  );
+
+  assert.equal(security.isAllowedPageUrl('https://www.douyin.com/video/123'), true);
+  assert.equal(security.isAllowedPageUrl('https://www.xiaohongshu.com/explore/abc'), true);
+  assert.equal(security.isAllowedPageUrl('https://example.com/post/123'), false);
+  assert.throws(
+    () => security.assertAllowedPageUrl('https://example.com/post/123'),
+    /暂不允许/
+  );
 });
