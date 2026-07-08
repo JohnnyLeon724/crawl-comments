@@ -42,6 +42,19 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
 
         self.assertTrue(re.search(r"display_name:\s*\"Comment Excel Delivery\"", agent_yaml))
 
+    def test_comment_excel_delivery_documents_coordinate_click_mode(self):
+        skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        self.assertIn("coordinate", skill)
+        self.assertTrue(
+            "DOM click fallback" in skill
+            or "DOM-click fallback" in skill
+            or "dom-click fallback" in skill
+        )
+        self.assertIn('"clickMode": "coordinate"', workflow)
+        self.assertIn('"fallbackClickMode": "dom-click"', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

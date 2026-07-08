@@ -10,7 +10,7 @@ Use this skill to run the local semi-automated comment delivery pipeline in this
 The split of responsibility is fixed:
 
 - Scripts parse Excel, normalize JSON, merge runs, QA, resume, and generate workbooks.
-- MCP/browser tools expand comments, scroll, and capture bounded DOM candidate batches. The default browser step is `expand_and_capture_comment_batches`.
+- MCP/browser tools expand comments, scroll, and capture bounded DOM candidate batches. The default browser step is `expand_and_capture_comment_batches`, using coordinate click mode with dom-click fallback.
 - AI reads DOM candidate batches and produces structured comment JSON that matches the project schema.
 
 Before executing a project, read [references/workflow.md](references/workflow.md). It contains the command order, artifact names, and acceptance checks.

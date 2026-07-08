@@ -39,9 +39,20 @@ For each `runs/<task_id>/task.json`:
   "maxCharsPerCandidate": 2500,
   "includeHtml": true,
   "includeText": true,
+  "clickMode": "coordinate",
+  "fallbackClickMode": "dom-click",
+  "clickJitterPx": 4,
+  "mouseMoveStepsMin": 4,
+  "mouseMoveStepsMax": 9,
+  "clickDownMsMin": 60,
+  "clickDownMsMax": 160,
+  "clickGapMsMin": 300,
+  "clickGapMsMax": 900,
   "closePageAfter": true
 }
 ```
+
+Coordinate clicking is used for production interaction compatibility. If coordinate input is unavailable, the MCP tool falls back to `dom-click`; login, CAPTCHA, or verification pages should stop the run for user action.
 
 3. Use `capture-state.json` to confirm the generated batch range. The tool writes `batches/<batch_id>/comment-dom-batch.json` for non-empty batches.
 4. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
