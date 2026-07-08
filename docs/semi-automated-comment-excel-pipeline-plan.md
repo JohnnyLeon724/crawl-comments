@@ -258,7 +258,7 @@ python script/build_client_comment_excel.py \
 | 3 | 已完成 | MCP DOM snapshot | 很高 | 已投入 | `comment-dom-snapshot.json` | 当前页面可保存 bounded DOM chunks |
 | 4 | 已完成 | AI DOM 结构化契约 | 很高 | 已投入 | prompt + schema | AI 输出 rows/rejected 且可引用 chunk |
 | 5 | 已完成 | 归一化携带客户上下文 | 很高 | 中 | 增强 `normalized-comments.jsonl` | 每条评论能回溯到客户表行和任务 |
-| 6 | 待开始 | 项目级合并脚本 | 高 | 低 | `all-normalized-comments.jsonl` | 多任务评论可合并、去重、保序 |
+| 6 | 已完成 | 项目级合并脚本 | 高 | 低 | `all-normalized-comments.jsonl` | 多任务评论可合并、去重、保序 |
 | 7 | 待开始 | 交付 Excel 生成器 | 很高 | 中 | `build_client_comment_excel.py`、`delivery.xlsx` | 生成 `汇总`、`阶段汇总`、`评论明细` |
 | 8 | 待开始 | 项目结构解耦与仓库瘦身 | 高 | 中 | 分层目录、归档目录、清理清单 | 脚本、测试、文档、样例数据分类清楚，删除或归档非必须文件 |
 | 9 | 待开始 | QA 与差异标记 | 高 | 中 | `qa-summary.json`、Excel 状态列 | 识别 `ok/partial/failed` 和数量差异 |
