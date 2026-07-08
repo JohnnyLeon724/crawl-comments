@@ -97,7 +97,7 @@ Chrome 插件不是第一版目标。
 |---|---|---|---:|---:|---|---|
 | 0 | 已完成 | 保留现有 CLI 采集闭环 | 很高 | 已投入 | `script/crawl-comments-playwright.js`、`script/expand-comments-v1.js` | 抖音、小红书可打开页面、展开评论、保存 raw |
 | 1 | 已完成 | 保留归一化、AI、Excel 后处理 | 很高 | 已投入 | `normalize-comments.js`、AI scripts、Excel script | raw 能转 normalized，AI 和 Excel 可复用 |
-| 2 | 待开始 | MCP 最小可行性验证 | 很高 | 低 | `mcp/comment-crawler-server.js` | Codex 能发现并调用一个本地 MCP tool |
+| 2 | 已完成 | MCP 最小可行性验证 | 很高 | 低 | `mcp/comment-crawler-server.js` | Codex 能发现并调用一个本地 MCP tool |
 | 3 | 待开始 | 抽出 CDP 页面控制模块 | 很高 | 中 | `mcp/comment-crawler-cdp.js` | 能连接 `http://127.0.0.1:9222` 并定位当前 tab |
 | 4 | 待开始 | 实现 `expand_current_page_comments` | 很高 | 中 | MCP tool | 当前 Chrome 页面可注入 expander 并返回评论数、stop reason |
 | 5 | 待开始 | 实现 `save_current_page_comments` | 高 | 低 | MCP tool、`output/<run_id>/` | 当前页面 payload 可保存 raw JSON/CSV/manifest |
