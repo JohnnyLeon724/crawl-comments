@@ -254,7 +254,7 @@ python script/build_client_comment_excel.py \
 |---|---|---|---:|---:|---|---|
 | 0 | 已完成 | 明确半自动边界 | 很高 | 低 | 本文档方向 | 脚本管确定性，AI 管理解，MCP 管页面动作 |
 | 1 | 已完成 | 客户需求表解析 | 很高 | 低 | `src/pipeline/parse_client_requirements.py`、`crawl-tasks.json` | 能从客户表生成任务，链接清洗正确 |
-| 2 | 待开始 | 任务运行目录规范 | 高 | 低 | `task.json`、`run-manifest.json` | 每条任务有独立目录和状态 |
+| 2 | 已完成 | 任务运行目录规范 | 高 | 低 | `task.json`、`run-manifest.json` | 每条任务有独立目录和状态 |
 | 3 | 已完成 | MCP DOM snapshot | 很高 | 已投入 | `comment-dom-snapshot.json` | 当前页面可保存 bounded DOM chunks |
 | 4 | 已完成 | AI DOM 结构化契约 | 很高 | 已投入 | prompt + schema | AI 输出 rows/rejected 且可引用 chunk |
 | 5 | 待开始 | 归一化携带客户上下文 | 很高 | 中 | 增强 `normalized-comments.jsonl` | 每条评论能回溯到客户表行和任务 |

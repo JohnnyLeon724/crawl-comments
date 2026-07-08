@@ -65,11 +65,18 @@ class ParseClientRequirementsTest(unittest.TestCase):
 
             tasks_path = out_dir / "crawl-tasks.json"
             manifest_path = out_dir / "run-manifest.json"
+            task_dir = out_dir / "runs" / "task_0001"
+            task_path = task_dir / "task.json"
             self.assertEqual(result["task_count"], 2)
             self.assertTrue(tasks_path.exists())
             self.assertTrue(manifest_path.exists())
+            self.assertTrue(task_path.exists())
             self.assertEqual(json.loads(tasks_path.read_text(encoding="utf-8"))["tasks"][0]["task_id"], "task_0001")
-            self.assertEqual(json.loads(manifest_path.read_text(encoding="utf-8"))["status"], "pending")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["status"], "pending")
+            self.assertEqual(manifest["tasks"][0]["task_id"], "task_0001")
+            self.assertEqual(manifest["tasks"][0]["run_dir"], str(task_dir))
+            self.assertEqual(json.loads(task_path.read_text(encoding="utf-8"))["task_id"], "task_0001")
 
     def test_crawl_task_schema_exists(self):
         schema_path = ROOT / "schemas" / "crawl-task.schema.json"

@@ -133,16 +133,26 @@ def parse_workbook(input_path: str | Path, phase: str, sheet_name: str | None = 
 
 def build_manifest(tasks: list[dict[str, Any]], out_dir: str | Path) -> dict[str, Any]:
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    output_dir = Path(out_dir)
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "pending",
         "created_at": now,
-        "out_dir": str(out_dir),
+        "out_dir": str(output_dir),
         "task_count": len(tasks),
         "pending_count": len([task for task in tasks if task.get("status") == "pending"]),
+        "tasks": [
+            {
+                "task_id": str(task["task_id"]),
+                "status": str(task.get("status") or "pending"),
+                "run_dir": str(output_dir / "runs" / str(task["task_id"])),
+                "task_file": str(output_dir / "runs" / str(task["task_id"]) / "task.json"),
+            }
+            for task in tasks
+        ],
         "output_files": {
-            "tasks": str(Path(out_dir) / "crawl-tasks.json"),
-            "manifest": str(Path(out_dir) / "run-manifest.json"),
+            "tasks": str(output_dir / "crawl-tasks.json"),
+            "manifest": str(output_dir / "run-manifest.json"),
         },
     }
 
@@ -163,6 +173,8 @@ def write_project_files(tasks: list[dict[str, Any]], out_dir: str | Path) -> dic
 
     write_json(output_dir / "crawl-tasks.json", tasks_payload)
     write_json(output_dir / "run-manifest.json", manifest)
+    for task in tasks:
+        write_json(output_dir / "runs" / str(task["task_id"]) / "task.json", task)
 
     return {
         "status": "success",
