@@ -850,6 +850,125 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function buildExpandTargetScript() {
+  return config => {
+    const normalizeText = value => String(value == null ? '' : value).replace(/\s+/g, '').trim();
+    const expandPatterns = [
+      /^展开更多(?:回复|评论)?$/,
+      /^展开(?:全部)?\d+条?回复$/,
+      /^展开\d+回复$/,
+      /^查看(?:全部|更多)?\d+条?回复$/,
+      /^查看(?:全部|更多)?回复$/,
+      /^查看更多回复$/,
+      /^更多回复$/
+    ];
+    const rejectPatterns = [
+      /展开全文/,
+      /收起/,
+      /商品/,
+      /详情/
+    ];
+    const isExpandText = value => {
+      const text = normalizeText(value);
+      if (!text || text.length > 24) return false;
+      if (rejectPatterns.some(pattern => pattern.test(text))) return false;
+      return expandPatterns.some(pattern => pattern.test(text));
+    };
+    const isVisible = el => {
+      if (!el) return false;
+      if (el.disabled) return false;
+      if (String(el.getAttribute && el.getAttribute('aria-disabled')) === 'true') return false;
+      if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false;
+      const rect = typeof el.getBoundingClientRect === 'function'
+        ? el.getBoundingClientRect()
+        : null;
+      if (!rect || rect.width <= 0 || rect.height <= 0) return false;
+      if (rect.bottom < 0 || rect.top > (window.innerHeight || 0)) return false;
+      const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      if (style && (
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.pointerEvents === 'none' ||
+        Number(style.opacity) === 0
+      )) {
+        return false;
+      }
+      return true;
+    };
+    const getDomPath = el => {
+      const parts = [];
+      let current = el;
+      while (current && current.nodeType !== 9 && parts.length < 8) {
+        const tagName = current.tagName || 'NODE';
+        let index = 1;
+        let prev = current.previousElementSibling;
+        while (prev) {
+          if (prev.tagName === tagName) index += 1;
+          prev = prev.previousElementSibling;
+        }
+        parts.unshift(`${tagName}:nth-of-type(${index})`);
+        current = current.parentElement;
+      }
+      return parts.join('>');
+    };
+    const hasMatchingDescendant = el => {
+      if (!el || typeof el.querySelectorAll !== 'function') return false;
+      return Array.from(el.querySelectorAll('*')).some(child => child !== el && isVisible(child) && isExpandText(child.textContent));
+    };
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+    const targets = [];
+
+    for (const el of Array.from(document.querySelectorAll('button,[role="button"],a,span,div'))) {
+      if (targets.length >= config.maxClicksPerRound) break;
+      if (!isVisible(el)) continue;
+      const text = normalizeText(el.textContent);
+      if (!isExpandText(text)) continue;
+      if (hasMatchingDescendant(el)) continue;
+      const rect = el.getBoundingClientRect();
+      const center = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+      const jitterX = config.clickJitterPx
+        ? (config.randomValue - 0.5) * 2 * config.clickJitterPx
+        : 0;
+      const jitterY = config.clickJitterPx
+        ? (0.5 - config.randomValue) * 2 * config.clickJitterPx
+        : 0;
+
+      targets.push({
+        text,
+        dom_path: getDomPath(el),
+        rect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height
+        },
+        center,
+        click_point: {
+          x: clamp(center.x + jitterX, rect.left + 1, rect.left + rect.width - 1),
+          y: clamp(center.y + jitterY, rect.top + 1, rect.top + rect.height - 1)
+        }
+      });
+    }
+
+    return targets;
+  };
+}
+
+async function findVisibleExpandTargets(page, options = {}) {
+  const maxClicksPerRound = toPositiveInteger(options.maxClicksPerRound, DEFAULT_EXPAND_CAPTURE_CONFIG.maxClicksPerRound);
+  const clickJitterPx = toNonNegativeInteger(options.clickJitterPx, DEFAULT_CLICK_PROFILE.clickJitterPx);
+  const random = typeof options.random === 'function' ? options.random : Math.random;
+
+  return page.evaluate(buildExpandTargetScript(), {
+    maxClicksPerRound,
+    clickJitterPx,
+    randomValue: random()
+  });
+}
+
 async function expandVisibleCommentsOnce(page, options = {}) {
   const maxClicksPerRound = toPositiveInteger(options.maxClicksPerRound, DEFAULT_EXPAND_CAPTURE_CONFIG.maxClicksPerRound);
 
@@ -1672,6 +1791,8 @@ module.exports = {
   normalizeClickMode,
   normalizeClickProfile,
   normalizeExpandCaptureConfig,
+  buildExpandTargetScript,
+  findVisibleExpandTargets,
   expandVisibleCommentsOnce,
   scrollCommentContainer,
   decorateCaptureState,

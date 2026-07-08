@@ -376,6 +376,75 @@ test('normalizes coordinate click configuration with safe defaults and clamped r
   assert.equal(config.click.clickJitterPx, 3);
 });
 
+test('findVisibleExpandTargets returns innermost visible expand controls with bounded click points', async () => {
+  const tools = require(toolsPath);
+
+  const page = {
+    evaluate: async (_pageFunction, config) => {
+      const makeElement = input => ({
+        tagName: input.tagName || 'BUTTON',
+        textContent: input.text,
+        disabled: Boolean(input.disabled),
+        previousElementSibling: null,
+        parentElement: input.parent || null,
+        nodeType: 1,
+        getAttribute: name => input.attrs && input.attrs[name] || '',
+        getClientRects: () => input.visible === false ? [] : [{}],
+        getBoundingClientRect: () => input.rect,
+        querySelectorAll: () => input.children || [],
+        offsetParent: input.visible === false ? null : {}
+      });
+      const child = makeElement({
+        tagName: 'SPAN',
+        text: '展开5条回复',
+        rect: { left: 20, top: 30, width: 80, height: 20, bottom: 50 }
+      });
+      const parent = makeElement({
+        tagName: 'BUTTON',
+        text: '展开5条回复',
+        rect: { left: 10, top: 20, width: 120, height: 40, bottom: 60 },
+        children: [child]
+      });
+      child.parentElement = parent;
+      const rejected = makeElement({
+        text: '展开全文',
+        rect: { left: 10, top: 80, width: 100, height: 20, bottom: 100 }
+      });
+      const hidden = makeElement({
+        text: '展开2条回复',
+        visible: false,
+        rect: { left: 10, top: 120, width: 100, height: 20, bottom: 140 }
+      });
+      const elements = [parent, child, rejected, hidden];
+      global.window = {
+        innerHeight: 800,
+        getComputedStyle: () => ({ display: 'block', visibility: 'visible', pointerEvents: 'auto', opacity: '1' })
+      };
+      global.document = { querySelectorAll: () => elements };
+      try {
+        return _pageFunction(config);
+      } finally {
+        delete global.window;
+        delete global.document;
+      }
+    }
+  };
+
+  const targets = await tools.findVisibleExpandTargets(page, {
+    maxClicksPerRound: 3,
+    clickJitterPx: 4,
+    random: () => 0.75
+  });
+
+  assert.equal(targets.length, 1);
+  assert.equal(targets[0].text, '展开5条回复');
+  assert.equal(targets[0].rect.left, 20);
+  assert.ok(targets[0].click_point.x >= 20);
+  assert.ok(targets[0].click_point.x <= 100);
+  assert.ok(targets[0].click_point.y >= 30);
+  assert.ok(targets[0].click_point.y <= 50);
+});
+
 test('stage 5 saves the current page comment payload to CLI-compatible output files', async () => {
   assert.equal(fs.existsSync(outputPath), true);
 
