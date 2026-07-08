@@ -630,6 +630,134 @@ test('capture_current_comment_dom_snapshot can close the selected page after wri
   ]);
 });
 
+test('capture_comment_candidate_batch is exposed with bounded batch inputs', () => {
+  const tools = require(toolsPath);
+  const listed = tools.listTools();
+  const captureTool = listed.find(tool => tool.name === 'capture_comment_candidate_batch');
+
+  assert.ok(captureTool);
+  assert.equal(captureTool.inputSchema.properties.outDir.type, 'string');
+  assert.equal(captureTool.inputSchema.properties.taskId.type, 'string');
+  assert.equal(captureTool.inputSchema.properties.batchId.type, 'string');
+  assert.equal(captureTool.inputSchema.properties.stateFile.type, 'string');
+  assert.equal(captureTool.inputSchema.properties.maxCandidates.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.maxCharsPerCandidate.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.scrollAfterCapture.type, 'boolean');
+  assert.equal(captureTool.inputSchema.properties.closePageAfter.type, 'boolean');
+});
+
+test('capture_comment_candidate_batch writes a batch file and capture state', async () => {
+  const tools = require(toolsPath);
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const outDir = path.join(projectRoot, 'output', 'task_0001');
+  const calls = [];
+  const page = {
+    url: () => 'https://www.douyin.com/video/123',
+    close: async options => calls.push(['pageClose', options.runBeforeUnload])
+  };
+  const batch = {
+    schema_version: 'comment-dom-batch-v1',
+    batch_id: 'batch_0001',
+    task_id: 'task_0001',
+    platform: 'douyin',
+    source_url: 'https://www.douyin.com/video/123',
+    captured_at: '2026-07-08T05:00:00.000Z',
+    scroll: {
+      before_top: 1000,
+      after_top: 1600,
+      viewport_height: 900,
+      document_height: 5000
+    },
+    state: {
+      new_candidate_count: 1,
+      seen_candidate_count: 1,
+      has_more: false,
+      stop_reason: ''
+    },
+    limits: {
+      maxCandidates: 2,
+      maxCharsPerCandidate: 1000
+    },
+    candidates: [
+      {
+        candidate_id: 'candidate_000001',
+        candidate_hash: 'hash-1',
+        dom_path: 'DIV:nth-of-type(1)',
+        role_hint: 'comment_candidate',
+        inner_text: '用户A 评论内容',
+        html: '<div>用户A 评论内容</div>',
+        nearby_buttons: ['回复'],
+        rect: { top: 120, left: 20, width: 300, height: 80 },
+        captured_at: '2026-07-08T05:00:00.000Z'
+      }
+    ]
+  };
+
+  const result = await tools.callTool('capture_comment_candidate_batch', {
+    outDir,
+    taskId: 'task_0001',
+    batchId: 'batch_0001',
+    maxCandidates: 2,
+    maxCharsPerCandidate: 1000,
+    scrollAfterCapture: true,
+    scrollStepRatio: 0.75,
+    closePageAfter: true
+  }, {
+    connectToCdp: async options => {
+      calls.push(['connect', options.timeoutMs]);
+      return {
+        page,
+        close: async () => calls.push(['sessionClose'])
+      };
+    },
+    captureCommentCandidateBatch: async (_page, options) => {
+      calls.push([
+        'capture',
+        options.taskId,
+        options.batchId,
+        options.maxCandidates,
+        options.maxCharsPerCandidate,
+        options.scrollAfterCapture,
+        options.scrollStepRatio,
+        options.seenCandidateHashes.length
+      ]);
+      return batch;
+    },
+    projectRoot
+  });
+
+  const batchDir = path.join(outDir, 'batches', 'batch_0001');
+  const batchFile = path.join(batchDir, 'comment-dom-batch.json');
+  const stateFile = path.join(outDir, 'capture-state.json');
+
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.status, 'success');
+  assert.equal(result.structuredContent.outDir, outDir);
+  assert.equal(result.structuredContent.batchDir, batchDir);
+  assert.equal(result.structuredContent.batchFile, batchFile);
+  assert.equal(result.structuredContent.stateFile, stateFile);
+  assert.equal(result.structuredContent.batchId, 'batch_0001');
+  assert.equal(result.structuredContent.nextBatchId, 'batch_0002');
+  assert.equal(result.structuredContent.candidateCount, 1);
+  assert.equal(result.structuredContent.hasMore, false);
+  assert.equal(result.structuredContent.closedPage, true);
+  assert.equal(fs.existsSync(batchFile), true);
+  assert.equal(fs.existsSync(stateFile), true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(batchFile, 'utf8')), batch);
+
+  const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+  assert.equal(state.task_id, 'task_0001');
+  assert.equal(state.last_batch_id, 'batch_0001');
+  assert.equal(state.next_batch_id, 'batch_0002');
+  assert.deepEqual(state.seen_candidate_hashes, ['hash-1']);
+  assert.deepEqual(calls, [
+    ['connect', 30000],
+    ['capture', 'task_0001', 'batch_0001', 2, 1000, true, 0.75, 0],
+    ['pageClose', false],
+    ['sessionClose']
+  ]);
+});
+
 test('stage 9 rejects unsupported page hosts before injecting expander', async () => {
   const tools = require(toolsPath);
   const calls = [];

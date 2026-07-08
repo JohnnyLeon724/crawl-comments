@@ -168,3 +168,75 @@ test('normalizes candidate options to safe defaults', () => {
     seenCandidateHashes: []
   });
 });
+
+test('captures a page candidate batch from browser records', async () => {
+  const seenHash = candidates.buildCandidateHash({
+    roleHint: 'comment_candidate',
+    innerText: '用户A 已经见过的评论'
+  });
+  let passedConfig = null;
+  const page = {
+    evaluate: async (_fn, config) => {
+      passedConfig = config;
+      return {
+        records: [
+          {
+            dom_path: 'DIV:nth-of-type(1)',
+            role_hint: 'comment_candidate',
+            inner_text: '用户A 已经见过的评论',
+            html: '<div>用户A 已经见过的评论</div>',
+            nearby_buttons: ['回复'],
+            rect: { top: 10, left: 0, width: 300, height: 80 },
+            captured_at: '2026-07-08T05:10:00.000Z'
+          },
+          {
+            dom_path: 'DIV:nth-of-type(2)',
+            role_hint: 'reply_candidate',
+            inner_text: '用户B 新回复内容',
+            html: '<div>用户B 新回复内容</div>',
+            nearby_buttons: ['展开更多'],
+            rect: { top: 140, left: 20, width: 280, height: 70 },
+            captured_at: '2026-07-08T05:10:00.000Z'
+          }
+        ],
+        scroll: {
+          before_top: 1200,
+          after_top: 1800,
+          viewport_height: 900,
+          document_height: 6000
+        }
+      };
+    }
+  };
+
+  const batch = await candidates.captureCommentCandidateBatch(page, {
+    taskId: 'task_0002',
+    batchId: 'batch_0003',
+    platform: 'xiaohongshu',
+    sourceUrl: 'https://www.xiaohongshu.com/explore/abc',
+    seenCandidateHashes: [seenHash],
+    maxCandidates: 10,
+    maxCharsPerCandidate: 1000,
+    scrollAfterCapture: true,
+    scrollStepRatio: 0.7,
+    capturedAt: '2026-07-08T05:10:00.000Z'
+  });
+
+  assert.equal(passedConfig.scrollAfterCapture, true);
+  assert.equal(passedConfig.scrollStepRatio, 0.7);
+  assert.equal(batch.schema_version, 'comment-dom-batch-v1');
+  assert.equal(batch.task_id, 'task_0002');
+  assert.equal(batch.batch_id, 'batch_0003');
+  assert.equal(batch.platform, 'xiaohongshu');
+  assert.equal(batch.source_url, 'https://www.xiaohongshu.com/explore/abc');
+  assert.deepEqual(batch.scroll, {
+    before_top: 1200,
+    after_top: 1800,
+    viewport_height: 900,
+    document_height: 6000
+  });
+  assert.equal(batch.candidates.length, 1);
+  assert.equal(batch.candidates[0].role_hint, 'reply_candidate');
+  assert.equal(batch.candidates[0].inner_text, '用户B 新回复内容');
+  assert.equal(batch.state.seen_candidate_count, 2);
+});
