@@ -239,6 +239,14 @@ node script/normalize-ai-comment-extraction.js \
 
 ### 4.5 项目级合并、QA 与 Excel 生成
 
+需要断点续跑时，先生成安全复跑计划：
+
+```bash
+python src/pipeline/resume_comment_project.py \
+  --project-dir output/michelin_kol_0630 \
+  --out output/michelin_kol_0630/resume-plan.json
+```
+
 ```bash
 python src/pipeline/merge_comment_runs.py \
   --project-dir output/michelin_kol_0630 \
@@ -274,7 +282,7 @@ python src/pipeline/build_client_comment_excel.py \
 | 7 | 已完成 | 交付 Excel 生成器 | 很高 | 中 | `src/pipeline/build_client_comment_excel.py`、`delivery.xlsx` | 生成 `汇总`、`阶段汇总`、`评论明细` |
 | 8 | 已完成 | 项目结构解耦与仓库瘦身 | 高 | 中 | 分层目录、归档目录、清理清单 | 脚本、测试、文档、样例数据分类清楚，删除或归档非必须文件 |
 | 9 | 已完成 | QA 与差异标记 | 高 | 中 | `src/pipeline/qa_comment_delivery.py`、`qa-summary.json`、Excel 状态列 | 识别 `ok/partial/failed` 和数量差异 |
-| 10 | 待开始 | 批量断点续跑 | 高 | 中 | `resume` 工作流 | 失败任务可重跑，不覆盖已完成任务 |
+| 10 | 已完成 | 批量断点续跑 | 高 | 中 | `src/pipeline/resume_comment_project.py`、`resume-plan.json` | 失败任务可重跑，不覆盖已完成任务 |
 | 11 | 待开始 | B站字段兼容 | 中 | 中 | B站 adapter 映射 | 兼容 `bilibili_comments_all_phases.xlsx` 的字段习惯 |
 | 12 | 待开始 | 沉淀为 Codex skill | 中高 | 低 | `comment-excel-delivery` skill | Codex 可按固定流程处理新客户表 |
 
