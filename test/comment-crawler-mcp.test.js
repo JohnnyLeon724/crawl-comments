@@ -758,6 +758,110 @@ test('capture_comment_candidate_batch writes a batch file and capture state', as
   ]);
 });
 
+test('capture_comment_candidate_batches_until_idle is exposed with loop controls', () => {
+  const tools = require(toolsPath);
+  const listed = tools.listTools();
+  const captureTool = listed.find(tool => tool.name === 'capture_comment_candidate_batches_until_idle');
+
+  assert.ok(captureTool);
+  assert.equal(captureTool.inputSchema.properties.maxBatches.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.maxIdleBatches.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.closePageAfter.type, 'boolean');
+});
+
+test('capture_comment_candidate_batches_until_idle writes batches until consecutive empty batches', async () => {
+  const tools = require(toolsPath);
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const outDir = path.join(projectRoot, 'output', 'task_0001');
+  const calls = [];
+  const page = {
+    url: () => 'https://www.douyin.com/video/123',
+    close: async options => calls.push(['pageClose', options.runBeforeUnload])
+  };
+  const batchesById = {
+    batch_0001: {
+      schema_version: 'comment-dom-batch-v1',
+      batch_id: 'batch_0001',
+      task_id: 'task_0001',
+      platform: 'douyin',
+      source_url: 'https://www.douyin.com/video/123',
+      captured_at: '2026-07-08T05:00:00.000Z',
+      scroll: {},
+      state: { new_candidate_count: 1, seen_candidate_count: 1, has_more: false, stop_reason: '' },
+      limits: {},
+      candidates: [{ candidate_id: 'candidate_000001', candidate_hash: 'hash-1' }]
+    },
+    batch_0002: {
+      schema_version: 'comment-dom-batch-v1',
+      batch_id: 'batch_0002',
+      task_id: 'task_0001',
+      platform: 'douyin',
+      source_url: 'https://www.douyin.com/video/123',
+      captured_at: '2026-07-08T05:00:01.000Z',
+      scroll: {},
+      state: { new_candidate_count: 0, seen_candidate_count: 1, has_more: false, stop_reason: '' },
+      limits: {},
+      candidates: []
+    },
+    batch_0003: {
+      schema_version: 'comment-dom-batch-v1',
+      batch_id: 'batch_0003',
+      task_id: 'task_0001',
+      platform: 'douyin',
+      source_url: 'https://www.douyin.com/video/123',
+      captured_at: '2026-07-08T05:00:02.000Z',
+      scroll: {},
+      state: { new_candidate_count: 0, seen_candidate_count: 1, has_more: false, stop_reason: '' },
+      limits: {},
+      candidates: []
+    }
+  };
+
+  const result = await tools.callTool('capture_comment_candidate_batches_until_idle', {
+    outDir,
+    taskId: 'task_0001',
+    maxBatches: 5,
+    maxIdleBatches: 2,
+    maxCandidates: 2,
+    maxCharsPerCandidate: 1000,
+    closePageAfter: true
+  }, {
+    connectToCdp: async () => ({
+      page,
+      close: async () => calls.push(['sessionClose'])
+    }),
+    captureCommentCandidateBatch: async (_page, options) => {
+      calls.push(['capture', options.batchId, options.seenCandidateHashes.length]);
+      return batchesById[options.batchId];
+    },
+    projectRoot
+  });
+
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.status, 'success');
+  assert.equal(result.structuredContent.batchCount, 3);
+  assert.equal(result.structuredContent.candidateCount, 1);
+  assert.equal(result.structuredContent.stopReason, 'idle');
+  assert.equal(result.structuredContent.lastBatchId, 'batch_0003');
+  assert.equal(result.structuredContent.nextBatchId, 'batch_0004');
+  assert.equal(result.structuredContent.closedPage, true);
+  assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0001', 'comment-dom-batch.json')), true);
+  assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0002', 'comment-dom-batch.json')), true);
+  assert.equal(fs.existsSync(path.join(outDir, 'batches', 'batch_0003', 'comment-dom-batch.json')), true);
+
+  const state = JSON.parse(fs.readFileSync(path.join(outDir, 'capture-state.json'), 'utf8'));
+  assert.equal(state.last_batch_id, 'batch_0003');
+  assert.equal(state.next_batch_id, 'batch_0004');
+  assert.deepEqual(state.seen_candidate_hashes, ['hash-1']);
+  assert.deepEqual(calls, [
+    ['capture', 'batch_0001', 0],
+    ['capture', 'batch_0002', 1],
+    ['capture', 'batch_0003', 1],
+    ['pageClose', false],
+    ['sessionClose']
+  ]);
+});
+
 test('stage 9 rejects unsupported page hosts before injecting expander', async () => {
   const tools = require(toolsPath);
   const calls = [];

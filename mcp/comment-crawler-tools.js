@@ -18,6 +18,7 @@ const SAVE_TOOL_NAME = 'save_current_page_comments';
 const NORMALIZE_TOOL_NAME = 'normalize_comment_run';
 const CAPTURE_DOM_TOOL_NAME = 'capture_current_comment_dom_snapshot';
 const CAPTURE_CANDIDATE_BATCH_TOOL_NAME = 'capture_comment_candidate_batch';
+const CAPTURE_CANDIDATE_BATCHES_TOOL_NAME = 'capture_comment_candidate_batches_until_idle';
 const DEFAULT_EXPAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 function resolveProjectRoot(options = {}) {
@@ -337,6 +338,97 @@ function listTools() {
         },
         required: ['status', 'runId', 'outDir', 'batchDir', 'batchFile', 'stateFile', 'platform', 'url', 'taskId', 'batchId', 'nextBatchId', 'candidateCount', 'hasMore']
       }
+    },
+    {
+      name: CAPTURE_CANDIDATE_BATCHES_TOOL_NAME,
+      title: 'Capture Comment Candidate Batches Until Idle',
+      description: 'Connect to Chrome CDP once, repeatedly capture bounded visible comment candidate batches, update capture-state.json after each batch, and stop after consecutive empty batches or maxBatches.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          cdpEndpoint: {
+            type: 'string',
+            description: 'Chrome DevTools Protocol endpoint. Defaults to http://127.0.0.1:9222.'
+          },
+          connectTimeoutMs: {
+            type: 'number',
+            description: 'Timeout for connecting to Chrome CDP.'
+          },
+          outDir: {
+            type: 'string',
+            description: 'Task output directory under project output.'
+          },
+          runId: {
+            type: 'string',
+            description: 'Optional run id when outDir is omitted.'
+          },
+          taskId: {
+            type: 'string',
+            description: 'Task id written into each batch file.'
+          },
+          stateFile: {
+            type: 'string',
+            description: 'Optional capture state path under project output. Defaults to <outDir>/capture-state.json.'
+          },
+          maxBatches: {
+            type: 'number',
+            description: 'Maximum batches to capture before stopping.'
+          },
+          maxIdleBatches: {
+            type: 'number',
+            description: 'Stop after this many consecutive batches with zero new candidates.'
+          },
+          maxCandidates: {
+            type: 'number',
+            description: 'Maximum candidates captured in each batch.'
+          },
+          maxCharsPerCandidate: {
+            type: 'number',
+            description: 'Maximum text/html characters per candidate.'
+          },
+          includeHtml: {
+            type: 'boolean',
+            description: 'Whether to include sanitized local HTML for AI extraction.'
+          },
+          includeText: {
+            type: 'boolean',
+            description: 'Whether to include visible text for AI extraction.'
+          },
+          scrollStepRatio: {
+            type: 'number',
+            description: 'Scroll step as a ratio of viewport height. Defaults to 0.85.'
+          },
+          closePageAfter: {
+            type: 'boolean',
+            description: 'Close the selected Chrome tab after the loop stops.'
+          }
+        },
+        additionalProperties: false
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+          runId: { type: 'string' },
+          outDir: { type: 'string' },
+          stateFile: { type: 'string' },
+          platform: { type: 'string' },
+          url: { type: 'string' },
+          taskId: { type: 'string' },
+          batchCount: { type: 'number' },
+          candidateCount: { type: 'number' },
+          stopReason: { type: 'string' },
+          lastBatchId: { type: 'string' },
+          nextBatchId: { type: 'string' },
+          batchFiles: {
+            type: 'array',
+            items: { type: 'string' }
+          },
+          closedPage: { type: 'boolean' },
+          closePageError: { type: 'string' }
+        },
+        required: ['status', 'runId', 'outDir', 'stateFile', 'platform', 'url', 'taskId', 'batchCount', 'candidateCount', 'stopReason', 'lastBatchId', 'nextBatchId', 'batchFiles']
+      }
     }
   ];
 
@@ -345,6 +437,7 @@ function listTools() {
     EXPAND_TOOL_NAME,
     CAPTURE_CANDIDATE_BATCH_TOOL_NAME,
     CAPTURE_DOM_TOOL_NAME,
+    CAPTURE_CANDIDATE_BATCHES_TOOL_NAME,
     SAVE_TOOL_NAME,
     NORMALIZE_TOOL_NAME
   ];
@@ -503,6 +596,12 @@ function updateCaptureState(input) {
     seen_candidate_hashes: Array.from(seen),
     batches
   };
+}
+
+function toPositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return parsed;
 }
 
 async function expandCurrentPageComments(args = {}, context = {}) {
@@ -768,6 +867,118 @@ async function captureCurrentCommentCandidateBatch(args = {}, context = {}) {
   }
 }
 
+async function captureCurrentCommentCandidateBatchesUntilIdle(args = {}, context = {}) {
+  const projectRoot = resolveProjectRoot(context);
+  const connectToCdp = context.connectToCdp || cdp.connectToCdp;
+  const session = await connectToCdp({
+    cdpEndpoint: args.cdpEndpoint,
+    timeoutMs: Number.isFinite(Number(args.connectTimeoutMs))
+      ? Number(args.connectTimeoutMs)
+      : cdp.DEFAULT_CDP_TIMEOUT_MS,
+    playwright: context.playwright
+  });
+
+  try {
+    const page = session.page;
+    const sourceUrl = getPageUrl(page);
+    security.assertAllowedPageUrl(sourceUrl, context.allowedHosts);
+
+    const runId = args.runId || runner.createRunId();
+    const outDir = security.resolveOutputPath(
+      projectRoot,
+      args.outDir || path.join('output', runId)
+    );
+    const stateFile = security.resolveOutputPath(
+      projectRoot,
+      args.stateFile || path.join(outDir, 'capture-state.json')
+    );
+    const captureBatch = context.captureCommentCandidateBatch || candidateBatch.captureCommentCandidateBatch;
+    const platform = detectPlatformSafe(sourceUrl);
+    const maxBatches = toPositiveInteger(args.maxBatches, 20);
+    const maxIdleBatches = toPositiveInteger(args.maxIdleBatches, 2);
+    const batchFiles = [];
+    let previousState = readCaptureState(stateFile);
+    const taskId = String(args.taskId || previousState.task_id || runId);
+    let batchCount = 0;
+    let candidateCount = 0;
+    let idleBatches = 0;
+    let lastBatchId = '';
+    let nextBatchId = resolveBatchId({}, previousState);
+    let stopReason = 'max_batches';
+
+    while (batchCount < maxBatches) {
+      const batchId = resolveBatchId({}, previousState);
+      nextBatchId = buildNextBatchId(batchId);
+      const batchDir = path.join(outDir, 'batches', batchId);
+      const batchFile = path.join(batchDir, 'comment-dom-batch.json');
+      const batch = await captureBatch(page, {
+        taskId,
+        batchId,
+        platform,
+        sourceUrl,
+        maxCandidates: args.maxCandidates,
+        maxCharsPerCandidate: args.maxCharsPerCandidate,
+        includeHtml: args.includeHtml,
+        includeText: args.includeText,
+        scrollAfterCapture: true,
+        scrollStepRatio: args.scrollStepRatio,
+        seenCandidateHashes: getSeenCandidateHashes(previousState)
+      });
+      const currentCandidates = Array.isArray(batch && batch.candidates) ? batch.candidates.length : 0;
+
+      fs.mkdirSync(batchDir, { recursive: true });
+      output.writeJson(batchFile, batch);
+      batchFiles.push(batchFile);
+      previousState = updateCaptureState({
+        previousState,
+        taskId,
+        platform: batch.platform || platform,
+        sourceUrl: batch.source_url || sourceUrl,
+        batchId,
+        nextBatchId,
+        batch,
+        batchFile
+      });
+      output.writeJson(stateFile, previousState);
+
+      batchCount += 1;
+      candidateCount += currentCandidates;
+      lastBatchId = batchId;
+      idleBatches = currentCandidates > 0 ? 0 : idleBatches + 1;
+
+      if (idleBatches >= maxIdleBatches) {
+        stopReason = 'idle';
+        break;
+      }
+    }
+
+    const result = {
+      status: 'success',
+      runId,
+      outDir,
+      stateFile,
+      platform,
+      url: sourceUrl,
+      taskId,
+      batchCount,
+      candidateCount,
+      stopReason,
+      lastBatchId,
+      nextBatchId,
+      batchFiles
+    };
+    const closeResult = await closePageIfRequested(page, args);
+    return {
+      ...result,
+      ...closeResult
+    };
+  } finally {
+    if (session && typeof session.close === 'function') {
+      await session.close();
+    }
+  }
+}
+
 async function callTool(name, args = {}, context = {}) {
   if (name === STATUS_TOOL_NAME) {
     return buildToolResult(getCommentCrawlerStatus({
@@ -795,6 +1006,10 @@ async function callTool(name, args = {}, context = {}) {
     return buildToolResult(await captureCurrentCommentCandidateBatch(args, context));
   }
 
+  if (name === CAPTURE_CANDIDATE_BATCHES_TOOL_NAME) {
+    return buildToolResult(await captureCurrentCommentCandidateBatchesUntilIdle(args, context));
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 }
 
@@ -806,6 +1021,7 @@ module.exports = {
   NORMALIZE_TOOL_NAME,
   CAPTURE_DOM_TOOL_NAME,
   CAPTURE_CANDIDATE_BATCH_TOOL_NAME,
+  CAPTURE_CANDIDATE_BATCHES_TOOL_NAME,
   DEFAULT_EXPAND_TIMEOUT_MS,
   getCommentCrawlerStatus,
   listTools,
@@ -819,6 +1035,7 @@ module.exports = {
   resolveBatchId,
   buildNextBatchId,
   updateCaptureState,
+  toPositiveInteger,
   buildExpandSummary,
   expandCurrentPageComments,
   readCurrentPagePayload,
@@ -826,5 +1043,6 @@ module.exports = {
   normalizeCommentRun,
   captureCurrentCommentDomSnapshot,
   captureCurrentCommentCandidateBatch,
+  captureCurrentCommentCandidateBatchesUntilIdle,
   callTool
 };

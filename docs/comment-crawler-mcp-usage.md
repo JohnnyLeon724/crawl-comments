@@ -4,13 +4,14 @@
 
 ## 1. 当前能力
 
-当前 MCP server 已实现 6 个工具：
+当前 MCP server 已实现 7 个工具：
 
 | 工具 | 用途 | 输出 |
 |---|---|---|
 | `get_comment_crawler_status` | 检查 MCP server 状态 | server 版本、项目目录 |
 | `expand_current_page_comments` | 连接当前 Chrome CDP 页面，注入 `src/browser/expand-comments-v1.js` 展开和下滚评论 | `stopReason`、评论数、点击数、轮次 |
 | `capture_comment_candidate_batch` | 捕获当前可见窗口内的评论候选 DOM，写入 batch，并可顺手下滚 | `batches/<batch_id>/comment-dom-batch.json`、`capture-state.json` |
+| `capture_comment_candidate_batches_until_idle` | 在同一个 Chrome 页面内连续捕获多个 candidate batch，直到连续空 batch 或达到上限 | 多个 `batches/<batch_id>/comment-dom-batch.json`、`capture-state.json` |
 | `capture_current_comment_dom_snapshot` | 读取当前页面有限 DOM chunks，供 AI 结构化提取评论字段 | `output/<run_id>/comment-dom-snapshot.json` |
 | `save_current_page_comments` | 读取页面里的 expander payload 并保存到项目本地 | `output/<run_id>/raw-comments.json`、CSV、manifest、截图 |
 | `normalize_comment_run` | 调用现有 normalizer，把 raw 转成统一 JSONL | `normalized-comments.jsonl` |
@@ -114,6 +115,27 @@ output/douyin_batch_ai_test_001/runs/task_0001/
 ```
 
 继续捕获下一批时，把 `batchId` 改成 `batch_0002`，或让工具根据 `capture-state.json` 推导下一批。批次达到上限时继续下一 batch，不要扩大单次 token。
+
+如果希望 MCP 自动连续捕获，可以改用 `capture_comment_candidate_batches_until_idle`：
+
+```text
+调用 comment-crawler 的 capture_comment_candidate_batches_until_idle，参数：
+{
+  "cdpEndpoint": "http://127.0.0.1:9222",
+  "outDir": "output/douyin_batch_ai_test_001/runs/task_0001",
+  "taskId": "task_0001",
+  "maxBatches": 20,
+  "maxIdleBatches": 2,
+  "maxCandidates": 80,
+  "maxCharsPerCandidate": 2500,
+  "includeHtml": true,
+  "includeText": true,
+  "scrollStepRatio": 0.85,
+  "closePageAfter": true
+}
+```
+
+它适合评论量大、需要先把 DOM 候选批次全部落盘的页面；后续 AI 仍然逐个 batch 结构化，不要把多个 batch 合并后一次性发给 AI。
 
 `closePageAfter: true` 只用在每个任务最后一次 MCP 页面操作上。它会在 batch、snapshot 或 raw 保存完成后关闭当前 Chrome tab，避免下一条链接打开后 MCP 仍然选中上一条任务页面。
 

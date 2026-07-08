@@ -12,6 +12,7 @@ test('MCP usage documentation describes the batch candidate workflow', () => {
 
   for (const requiredText of [
     'capture_comment_candidate_batch',
+    'capture_comment_candidate_batches_until_idle',
     'comment-dom-batch.json',
     'capture-state.json',
     'comment-candidate-batch-extraction.md',
