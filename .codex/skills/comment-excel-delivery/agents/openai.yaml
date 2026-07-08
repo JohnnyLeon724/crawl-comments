@@ -1,0 +1,4 @@
+interface:
+  display_name: "Comment Excel Delivery"
+  short_description: "Run the semi-automated comment-to-Excel delivery workflow."
+  default_prompt: "Use the comment Excel delivery workflow to parse requirements, guide comment extraction, normalize results, QA them, and build the delivery workbook."

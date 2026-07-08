@@ -292,7 +292,7 @@ python src/pipeline/build_client_comment_excel.py \
 | 9 | 已完成 | QA 与差异标记 | 高 | 中 | `src/pipeline/qa_comment_delivery.py`、`qa-summary.json`、Excel 状态列 | 识别 `ok/partial/failed` 和数量差异 |
 | 10 | 已完成 | 批量断点续跑 | 高 | 中 | `src/pipeline/resume_comment_project.py`、`resume-plan.json` | 失败任务可重跑，不覆盖已完成任务 |
 | 11 | 已完成 | B站字段兼容 | 中 | 中 | `src/pipeline/import_bilibili_delivery.py` | 兼容 `bilibili_comments_all_phases.xlsx` 的字段习惯 |
-| 12 | 待开始 | 沉淀为 Codex skill | 中高 | 低 | `comment-excel-delivery` skill | Codex 可按固定流程处理新客户表 |
+| 12 | 已完成 | 沉淀为 Codex skill | 中高 | 低 | `.codex/skills/comment-excel-delivery/` | Codex 可按固定流程处理新客户表 |
 
 ## 6. 第一轮开发范围
 
