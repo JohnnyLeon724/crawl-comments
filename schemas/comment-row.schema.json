@@ -26,6 +26,34 @@
       "type": "string",
       "description": "Stable key for dedupe and joins across processing stages."
     },
+    "task_id": {
+      "type": "string",
+      "description": "Client crawl task id, when normalized from a project task."
+    },
+    "phase": {
+      "type": "string"
+    },
+    "source_excel_row": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source_index": {
+      "type": "string"
+    },
+    "creator_name": {
+      "type": "string"
+    },
+    "published_at_text": {
+      "type": "string"
+    },
+    "source_engagement_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source_expected_comment_count": {
+      "type": "integer",
+      "minimum": 0
+    },
     "platform": {
       "type": "string",
       "enum": ["douyin", "xiaohongshu", "weibo", "unknown"]

@@ -28,8 +28,24 @@ test('infers AI extraction paths from a run directory', () => {
 
   assert.equal(args.input, path.join('output/run_001', 'ai-comment-extraction.json'));
   assert.equal(args.snapshot, path.join('output/run_001', 'comment-dom-snapshot.json'));
+  assert.equal(args.task, path.join('output/run_001', 'task.json'));
   assert.equal(args.out, path.join('output/run_001', 'normalized-comments.jsonl'));
   assert.equal(args.platform, 'xiaohongshu');
+});
+
+test('parses explicit task context path', () => {
+  const args = normalizer.parseArgs([
+    '--input',
+    'ai-comment-extraction.json',
+    '--snapshot',
+    'comment-dom-snapshot.json',
+    '--task',
+    'task.json',
+    '--out',
+    'normalized-comments.jsonl'
+  ]);
+
+  assert.equal(args.task, 'task.json');
 });
 
 test('normalizes AI extracted rows into existing comment row shape', () => {
@@ -73,7 +89,17 @@ test('normalizes AI extracted rows into existing comment row shape', () => {
 
   const rows = normalizer.normalizeAiExtraction(extraction, {
     snapshot,
-    platform: 'xiaohongshu'
+    platform: 'xiaohongshu',
+    task: {
+      task_id: 'task_0007',
+      phase: 'KOL link-0630',
+      source_excel_row: 8,
+      source_index: '7',
+      creator_name: '不劳累',
+      published_at_text: '5.23',
+      engagement_count: 143,
+      expected_comment_count: 49
+    }
   });
 
   assert.equal(rows.length, 1);
@@ -88,12 +114,18 @@ test('normalizes AI extracted rows into existing comment row shape', () => {
   assert.equal(rows[0].raw.ai_row.source_chunk_id, 'chunk_0001');
   assert.equal(rows[0].raw.ai_row.ip_location, '上海');
   assert.equal(rows[0].raw.source_chunk.inner_text, snapshot.chunks[0].inner_text);
+  assert.equal(rows[0].task_id, 'task_0007');
+  assert.equal(rows[0].phase, 'KOL link-0630');
+  assert.equal(rows[0].source_excel_row, 8);
+  assert.equal(rows[0].creator_name, '不劳累');
+  assert.equal(rows[0].raw.task.expected_comment_count, 49);
 });
 
 test('normalizes an AI extraction file and writes JSONL output', () => {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-ai-normalize-'));
   const extractionPath = path.join(runDir, 'ai-comment-extraction.json');
   const snapshotPath = path.join(runDir, 'comment-dom-snapshot.json');
+  const taskPath = path.join(runDir, 'task.json');
   const outPath = path.join(runDir, 'normalized-comments.jsonl');
 
   fs.writeFileSync(extractionPath, `${JSON.stringify({
@@ -128,10 +160,21 @@ test('normalizes an AI extraction file and writes JSONL output', () => {
       }
     ]
   }, null, 2)}\n`);
+  fs.writeFileSync(taskPath, `${JSON.stringify({
+    task_id: 'task_0001',
+    phase: 'KOL link-0630',
+    source_excel_row: 2,
+    source_index: '1',
+    creator_name: 'DJ初仔大朋友',
+    published_at_text: '6.15',
+    engagement_count: 134000,
+    expected_comment_count: 2922
+  }, null, 2)}\n`);
 
   const summary = normalizer.normalizeFile({
     input: extractionPath,
     snapshot: snapshotPath,
+    task: taskPath,
     out: outPath,
     platform: 'douyin'
   });
@@ -146,5 +189,8 @@ test('normalizes an AI extraction file and writes JSONL output', () => {
     .split('\n')
     .map(line => JSON.parse(line));
   assert.equal(rows[0].post_id, '7624758376937969290');
+  assert.equal(rows[0].task_id, 'task_0001');
+  assert.equal(rows[0].source_excel_row, 2);
   assert.equal(rows[0].raw.snapshot_file, snapshotPath);
+  assert.equal(rows[0].raw.task.creator_name, 'DJ初仔大朋友');
 });

@@ -18,6 +18,7 @@ function printUsage() {
   --run-dir     可选，自动推导 ai-comment-extraction.json、comment-dom-snapshot.json、normalized-comments.jsonl
   --input       可选，AI 结构化输出 JSON；未使用 --run-dir 时必填
   --snapshot    可选，DOM snapshot JSON；未使用 --run-dir 时建议提供
+  --task        可选，客户任务上下文 JSON；使用 --run-dir 时默认读取 task.json
   --out         可选，normalized-comments.jsonl 输出路径；未使用 --run-dir 时必填
   --platform    可选，douyin 或 xiaohongshu；未传时读取 AI 输出 platform
   --source-url  可选，源 URL；未传时读取 AI 输出 source_url
@@ -38,6 +39,7 @@ function parseArgs(argv) {
     runDir: '',
     input: '',
     snapshot: '',
+    task: '',
     out: '',
     platform: '',
     sourceUrl: '',
@@ -70,6 +72,12 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (token === '--task') {
+      args.task = readFlagValue(argv, i, token);
+      i += 1;
+      continue;
+    }
+
     if (token === '--out') {
       args.out = readFlagValue(argv, i, token);
       i += 1;
@@ -96,6 +104,7 @@ function parseArgs(argv) {
   if (args.runDir) {
     args.input = args.input || path.join(args.runDir, 'ai-comment-extraction.json');
     args.snapshot = args.snapshot || path.join(args.runDir, 'comment-dom-snapshot.json');
+    args.task = args.task || path.join(args.runDir, 'task.json');
     args.out = args.out || path.join(args.runDir, 'normalized-comments.jsonl');
   }
 
@@ -137,6 +146,21 @@ function buildChunkMap(snapshot) {
   return map;
 }
 
+function normalizeTaskContext(task) {
+  if (!task || typeof task !== 'object') return null;
+
+  return {
+    task_id: normalizeSpaces(task.task_id),
+    phase: normalizeSpaces(task.phase),
+    source_excel_row: Number.isInteger(task.source_excel_row) ? task.source_excel_row : 0,
+    source_index: normalizeSpaces(task.source_index),
+    creator_name: normalizeSpaces(task.creator_name),
+    published_at_text: normalizeSpaces(task.published_at_text),
+    source_engagement_count: Number.isFinite(Number(task.engagement_count)) ? Number(task.engagement_count) : 0,
+    source_expected_comment_count: Number.isFinite(Number(task.expected_comment_count)) ? Number(task.expected_comment_count) : 0
+  };
+}
+
 function normalizeAiRow(row, options) {
   const text = normalizeSpaces(row && row.text);
   if (!text) return null;
@@ -155,9 +179,21 @@ function normalizeAiRow(row, options) {
     text
   ]);
   const sourceChunk = options.chunkMap.get(sourceChunkId) || null;
+  const taskContext = normalizeTaskContext(options.task);
+  const rawTask = options.task && typeof options.task === 'object'
+    ? Object.assign({}, options.task)
+    : null;
 
   return {
     row_key: rowKey,
+    task_id: taskContext ? taskContext.task_id : '',
+    phase: taskContext ? taskContext.phase : '',
+    source_excel_row: taskContext ? taskContext.source_excel_row : 0,
+    source_index: taskContext ? taskContext.source_index : '',
+    creator_name: taskContext ? taskContext.creator_name : '',
+    published_at_text: taskContext ? taskContext.published_at_text : '',
+    source_engagement_count: taskContext ? taskContext.source_engagement_count : 0,
+    source_expected_comment_count: taskContext ? taskContext.source_expected_comment_count : 0,
     platform,
     source_url: sourceUrl,
     post_id: extractPostId(platform, sourceUrl),
@@ -173,6 +209,7 @@ function normalizeAiRow(row, options) {
     root_text: rowType === 'level1' ? text : normalizeSpaces(row.root_text),
     raw: {
       ai_row: Object.assign({}, row),
+      task: rawTask,
       source_chunk: sourceChunk,
       snapshot_file: options.snapshotFile || ''
     }
@@ -191,6 +228,7 @@ function normalizeAiExtraction(extraction, options = {}) {
       platform,
       sourceUrl,
       chunkMap,
+      task: options.task || null,
       snapshotFile: options.snapshotFile || ''
     });
     if (!row || seen.has(row.row_key)) continue;
@@ -215,9 +253,13 @@ function normalizeFile(args) {
   const snapshot = args.snapshot && fs.existsSync(args.snapshot)
     ? readJson(args.snapshot)
     : {};
+  const task = args.task && fs.existsSync(args.task)
+    ? readJson(args.task)
+    : null;
   const rows = normalizeAiExtraction(extraction, {
     snapshot,
     snapshotFile: args.snapshot || '',
+    task,
     platform: args.platform || extraction.platform || '',
     sourceUrl: args.sourceUrl || extraction.source_url || ''
   });
@@ -230,6 +272,7 @@ function normalizeFile(args) {
     platform: args.platform || extraction.platform || 'unknown',
     input: args.input,
     snapshot: args.snapshot || '',
+    task: args.task || '',
     out: args.out,
     rowCount: rows.length,
     rejectedCount: Array.isArray(extraction.rejected) ? extraction.rejected.length : 0

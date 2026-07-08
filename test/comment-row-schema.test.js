@@ -51,3 +51,18 @@ test('comment row schema includes fields required by AI and Excel stages', () =>
     assert.ok(schema.properties[field], `${field} should be present`);
   }
 });
+
+test('comment row schema includes optional client task context fields', () => {
+  for (const field of [
+    'task_id',
+    'phase',
+    'source_excel_row',
+    'source_index',
+    'creator_name',
+    'published_at_text',
+    'source_engagement_count',
+    'source_expected_comment_count'
+  ]) {
+    assert.ok(schema.properties[field], `${field} should be present`);
+  }
+});
