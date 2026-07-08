@@ -4,12 +4,13 @@
 
 ## 1. 当前能力
 
-当前 MCP server 已实现 4 个工具：
+当前 MCP server 已实现 5 个工具：
 
 | 工具 | 用途 | 输出 |
 |---|---|---|
 | `get_comment_crawler_status` | 检查 MCP server 状态 | server 版本、项目目录 |
 | `expand_current_page_comments` | 连接当前 Chrome CDP 页面，注入 `script/expand-comments-v1.js` 展开和下滚评论 | `stopReason`、评论数、点击数、轮次 |
+| `capture_current_comment_dom_snapshot` | 读取当前页面有限 DOM chunks，供 AI 结构化提取评论字段 | `output/<run_id>/comment-dom-snapshot.json` |
 | `save_current_page_comments` | 读取页面里的 expander payload 并保存到项目本地 | `output/<run_id>/raw-comments.json`、CSV、manifest、截图 |
 | `normalize_comment_run` | 调用现有 normalizer，把 raw 转成统一 JSONL | `normalized-comments.jsonl` |
 
@@ -84,7 +85,36 @@ args = ["/Users/gyp/Documents/demo/mcp/comment-crawler-server.js"]
 }
 ```
 
-3. 保存当前页面评论：
+3. 保存当前页面 DOM snapshot，供 AI 结构化：
+
+```text
+调用 comment-crawler 的 capture_current_comment_dom_snapshot，参数：
+{
+  "cdpEndpoint": "http://127.0.0.1:9222",
+  "outDir": "output/douyin_dom_ai_test_001",
+  "runId": "douyin_dom_ai_test_001",
+  "maxChunks": 120,
+  "maxCharsPerChunk": 3000,
+  "includeHtml": true,
+  "includeText": true
+}
+```
+
+4. 让 AI 读取 `prompts/comment-dom-extraction.md` 和 `comment-dom-snapshot.json`，输出：
+
+```text
+output/douyin_dom_ai_test_001/ai-comment-extraction.json
+```
+
+5. 归一化 AI 输出：
+
+```bash
+node script/normalize-ai-comment-extraction.js \
+  --run-dir output/douyin_dom_ai_test_001 \
+  --platform douyin
+```
+
+旧版纯脚本保存流程仍可用于回归对照：
 
 ```text
 调用 comment-crawler 的 save_current_page_comments，参数：
@@ -95,7 +125,7 @@ args = ["/Users/gyp/Documents/demo/mcp/comment-crawler-server.js"]
 }
 ```
 
-4. 归一化：
+再归一化旧版 raw-comments：
 
 ```text
 调用 comment-crawler 的 normalize_comment_run，参数：
@@ -171,6 +201,7 @@ node --test test/*.test.js
 |---|---|---|
 | 连接 CDP 失败 | Chrome 没用 `--remote-debugging-port=9222` 启动 | 重新按第 2 节启动 Chrome |
 | 评论数为 0 | 页面未登录、当前 tab 不对、页面评论未加载 | 在 CDP Chrome 中登录并切到目标页面 |
+| Codex 里看不到新工具 | MCP 进程还在用旧代码，或 Codex 未刷新工具列表 | 重启 Codex，或删除后重新添加该 MCP 配置 |
 | 保存时报“未找到 comment expander payload” | 还没运行展开工具，或页面刷新过 | 先重新调用 `expand_current_page_comments` |
 | 输出路径被拒绝 | `outDir` 不在项目 `output/` 下 | 使用 `output/<run_id>` |
 | 页面被拒绝 | 当前 URL 不是抖音或小红书域名 | 切到支持的平台页面 |

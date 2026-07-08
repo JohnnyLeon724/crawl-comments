@@ -27,7 +27,7 @@ function getCommentCrawlerStatus(options = {}) {
     status: 'ok',
     version: MCP_VERSION,
     projectRoot: resolveProjectRoot(options),
-    tools: [STATUS_TOOL_NAME]
+    tools: listTools().map(tool => tool.name)
   };
 }
 

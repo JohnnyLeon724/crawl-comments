@@ -17,18 +17,20 @@ test('stage 2 exposes a comment crawler status tool', async () => {
 
   const tools = require(toolsPath);
   const projectRoot = '/tmp/comment-crawler-demo';
+  const listed = tools.listTools();
+  const toolNames = listed.map(tool => tool.name);
 
   assert.deepEqual(tools.getCommentCrawlerStatus({ projectRoot }), {
     status: 'ok',
     version: 'mcp-v1',
     projectRoot,
-    tools: ['get_comment_crawler_status']
+    tools: toolNames
   });
 
-  const listed = tools.listTools();
   const statusTool = listed.find(tool => tool.name === 'get_comment_crawler_status');
   assert.ok(statusTool);
   assert.equal(statusTool.inputSchema.type, 'object');
+  assert.ok(toolNames.includes('capture_current_comment_dom_snapshot'));
 
   const result = await tools.callTool('get_comment_crawler_status', {}, { projectRoot });
   assert.equal(result.isError, false);
@@ -36,7 +38,7 @@ test('stage 2 exposes a comment crawler status tool', async () => {
     status: 'ok',
     version: 'mcp-v1',
     projectRoot,
-    tools: ['get_comment_crawler_status']
+    tools: toolNames
   });
   assert.equal(result.content[0].type, 'text');
   assert.match(result.content[0].text, /"status": "ok"/);
