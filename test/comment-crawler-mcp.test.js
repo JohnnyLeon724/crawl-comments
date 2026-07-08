@@ -390,3 +390,43 @@ test('stage 5 saves the current page comment payload to CLI-compatible output fi
     ['close']
   ]);
 });
+
+test('stage 6 normalizes a saved comment run through the MCP tool', async () => {
+  const tools = require(toolsPath);
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-normalize-'));
+  fs.writeFileSync(path.join(runDir, 'raw-comments.json'), `${JSON.stringify({
+    source_url: 'https://www.douyin.com/video/123',
+    results: [
+      {
+        row_type: 'level1',
+        text: '用户A：第一条评论 点赞 2',
+        dom_path: 'DIV:nth-of-type(1)',
+        captured_at: '2026-07-08T00:00:00.000Z'
+      }
+    ]
+  }, null, 2)}\n`);
+
+  const result = await tools.callTool('normalize_comment_run', {
+    runDir,
+    platform: 'douyin'
+  }, {
+    projectRoot: '/tmp/comment-crawler-demo'
+  });
+
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.status, 'success');
+  assert.equal(result.structuredContent.platform, 'douyin');
+  assert.equal(result.structuredContent.rowCount, 1);
+  assert.equal(result.structuredContent.out, path.join(runDir, 'normalized-comments.jsonl'));
+
+  const normalized = fs.readFileSync(path.join(runDir, 'normalized-comments.jsonl'), 'utf8')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line));
+
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].platform, 'douyin');
+  assert.equal(normalized[0].post_id, '123');
+  assert.equal(normalized[0].user_name, '用户A');
+  assert.equal(normalized[0].text, '第一条评论');
+});

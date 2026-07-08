@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const runner = require('../script/crawl-comments-playwright.js');
+const normalizer = require('../script/normalize-comments.js');
 const cdp = require('./comment-crawler-cdp.js');
 const output = require('./comment-crawler-output.js');
 
@@ -11,6 +12,7 @@ const MCP_VERSION = 'mcp-v1';
 const STATUS_TOOL_NAME = 'get_comment_crawler_status';
 const EXPAND_TOOL_NAME = 'expand_current_page_comments';
 const SAVE_TOOL_NAME = 'save_current_page_comments';
+const NORMALIZE_TOOL_NAME = 'normalize_comment_run';
 const DEFAULT_EXPAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 function resolveProjectRoot(options = {}) {
@@ -128,6 +130,46 @@ function listTools() {
           }
         },
         required: ['status', 'runId', 'outDir', 'rawCommentCount', 'outputFiles', 'errors']
+      }
+    },
+    {
+      name: NORMALIZE_TOOL_NAME,
+      title: 'Normalize Comment Run',
+      description: 'Normalize raw comment output in a run directory using the existing platform adapter.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          runDir: {
+            type: 'string',
+            description: 'Run directory containing raw-comments.json.'
+          },
+          platform: {
+            type: 'string',
+            enum: ['douyin', 'xiaohongshu'],
+            description: 'Comment platform adapter to use.'
+          },
+          sourceUrl: {
+            type: 'string',
+            description: 'Optional source URL override.'
+          },
+          out: {
+            type: 'string',
+            description: 'Optional normalized JSONL output path.'
+          }
+        },
+        required: ['runDir', 'platform'],
+        additionalProperties: false
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+          platform: { type: 'string' },
+          input: { type: 'string' },
+          out: { type: 'string' },
+          rowCount: { type: 'number' }
+        },
+        required: ['status', 'platform', 'input', 'out', 'rowCount']
       }
     }
   ];
@@ -261,6 +303,23 @@ async function saveCurrentPageComments(args = {}, context = {}) {
   }
 }
 
+function normalizeCommentRun(args = {}) {
+  if (!args.runDir) {
+    throw new Error('normalize_comment_run 需要 runDir');
+  }
+
+  if (!args.platform) {
+    throw new Error('normalize_comment_run 需要 platform');
+  }
+
+  return normalizer.normalizeFile({
+    input: path.join(args.runDir, 'raw-comments.json'),
+    out: args.out || path.join(args.runDir, 'normalized-comments.jsonl'),
+    platform: args.platform,
+    sourceUrl: args.sourceUrl || ''
+  });
+}
+
 async function callTool(name, args = {}, context = {}) {
   if (name === STATUS_TOOL_NAME) {
     return buildToolResult(getCommentCrawlerStatus({
@@ -276,6 +335,10 @@ async function callTool(name, args = {}, context = {}) {
     return buildToolResult(await saveCurrentPageComments(args, context));
   }
 
+  if (name === NORMALIZE_TOOL_NAME) {
+    return buildToolResult(normalizeCommentRun(args, context));
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 }
 
@@ -284,6 +347,7 @@ module.exports = {
   STATUS_TOOL_NAME,
   EXPAND_TOOL_NAME,
   SAVE_TOOL_NAME,
+  NORMALIZE_TOOL_NAME,
   DEFAULT_EXPAND_TIMEOUT_MS,
   getCommentCrawlerStatus,
   listTools,
@@ -293,5 +357,6 @@ module.exports = {
   expandCurrentPageComments,
   readCurrentPagePayload,
   saveCurrentPageComments,
+  normalizeCommentRun,
   callTool
 };
