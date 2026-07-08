@@ -466,3 +466,114 @@ test('stage 7 enforces project output paths and supported platform hosts', () =>
     /暂不允许/
   );
 });
+
+test('stage 9 rejects unsupported page hosts before injecting expander', async () => {
+  const tools = require(toolsPath);
+  const calls = [];
+  const page = {
+    url: () => 'https://example.com/post/123',
+    evaluate: async value => {
+      calls.push(['evaluate', typeof value]);
+      return null;
+    },
+    waitForFunction: async () => calls.push(['wait'])
+  };
+
+  await assert.rejects(
+    () => tools.expandCurrentPageComments({}, {
+      connectToCdp: async () => ({
+        page,
+        close: async () => calls.push(['close'])
+      }),
+      expanderScript: '/* should not inject */',
+      projectRoot: '/tmp/comment-crawler-demo'
+    }),
+    /暂不允许/
+  );
+
+  assert.deepEqual(calls, [
+    ['close']
+  ]);
+});
+
+test('stage 9 reports missing expander payload when saving current page comments', async () => {
+  const tools = require(toolsPath);
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const calls = [];
+  const page = {
+    url: () => 'https://www.douyin.com/video/123',
+    evaluate: async () => {
+      calls.push(['payload']);
+      return null;
+    },
+    screenshot: async () => calls.push(['screenshot'])
+  };
+
+  await assert.rejects(
+    () => tools.saveCurrentPageComments({
+      outDir: 'output/run_001'
+    }, {
+      connectToCdp: async () => ({
+        page,
+        close: async () => calls.push(['close'])
+      }),
+      projectRoot
+    }),
+    /请先运行 expand_current_page_comments/
+  );
+
+  assert.deepEqual(calls, [
+    ['payload'],
+    ['close']
+  ]);
+});
+
+test('stage 9 maps CDP connection failures to JSON-RPC internal errors', async () => {
+  const server = require(serverPath);
+
+  const response = await server.handleJsonRpcMessage({
+    jsonrpc: '2.0',
+    id: 9,
+    method: 'tools/call',
+    params: {
+      name: 'expand_current_page_comments',
+      arguments: {}
+    }
+  }, {
+    connectToCdp: async () => {
+      throw new Error('CDP endpoint is unavailable');
+    },
+    projectRoot: '/tmp/comment-crawler-demo'
+  });
+
+  assert.equal(response.id, 9);
+  assert.equal(response.error.code, -32603);
+  assert.match(response.error.message, /CDP endpoint is unavailable/);
+});
+
+test('stage 9 validates normalize_comment_run arguments and output boundary', () => {
+  const tools = require(toolsPath);
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const runDir = path.join(projectRoot, 'output', 'run_001');
+  fs.mkdirSync(runDir, { recursive: true });
+  fs.writeFileSync(path.join(runDir, 'raw-comments.json'), '{"results":[]}\n');
+
+  assert.throws(
+    () => tools.normalizeCommentRun({ platform: 'douyin' }, { projectRoot }),
+    /runDir/
+  );
+  assert.throws(
+    () => tools.normalizeCommentRun({ runDir }, { projectRoot }),
+    /platform/
+  );
+  assert.throws(
+    () => tools.normalizeCommentRun({
+      runDir,
+      platform: 'douyin',
+      out: path.join(os.tmpdir(), 'outside-normalized.jsonl')
+    }, {
+      projectRoot
+    }),
+    /output/
+  );
+});
