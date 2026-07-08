@@ -3,8 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const runner = require('../script/crawl-comments-playwright.js');
-const normalizer = require('../script/normalize-comments.js');
+const runner = require('../src/browser/crawl-comments-playwright.js');
+const normalizer = require('../src/normalize/normalize-comments.js');
 const cdp = require('./comment-crawler-cdp.js');
 const domSnapshot = require('./comment-crawler-dom-snapshot.js');
 const output = require('./comment-crawler-output.js');
@@ -265,7 +265,7 @@ function buildToolResult(value) {
 }
 
 function readExpanderScript(projectRoot) {
-  return fs.readFileSync(path.join(projectRoot, 'script', 'expand-comments-v1.js'), 'utf8');
+  return fs.readFileSync(path.join(projectRoot, 'src', 'browser', 'expand-comments-v1.js'), 'utf8');
 }
 
 function getPageUrl(page) {

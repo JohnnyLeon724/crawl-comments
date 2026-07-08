@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const runner = require('../script/crawl-comments-playwright.js');
+const runner = require('../src/browser/crawl-comments-playwright.js');
 
 function writeJson(filePath, data) {
   fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`);

@@ -1,6 +1,6 @@
 'use strict';
 
-const runner = require('../script/crawl-comments-playwright.js');
+const runner = require('../src/browser/crawl-comments-playwright.js');
 
 const DEFAULT_CDP_ENDPOINT = 'http://127.0.0.1:9222';
 const DEFAULT_CDP_TIMEOUT_MS = 30000;

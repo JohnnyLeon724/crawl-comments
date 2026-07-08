@@ -43,15 +43,15 @@ AI
 
 | 能力 | 状态 | 现有文件 |
 |---|---|---|
-| 页面评论展开和下滚 | 已完成 | `script/expand-comments-v1.js` |
-| Playwright 单链接采集 | 已完成 | `script/crawl-comments-playwright.js` |
+| 页面评论展开和下滚 | 已完成 | `src/browser/expand-comments-v1.js` |
+| Playwright 单链接采集 | 已完成 | `src/browser/crawl-comments-playwright.js` |
 | MCP 展开当前页面 | 已完成 | `mcp/comment-crawler-tools.js` |
 | MCP DOM snapshot | 已完成 | `capture_current_comment_dom_snapshot` |
 | DOM snapshot schema | 已完成 | `schemas/comment-dom-snapshot.schema.json` |
 | AI 结构化输出 schema | 已完成 | `schemas/ai-comment-extraction.schema.json` |
 | AI 结构化 prompt | 已完成 | `prompts/comment-dom-extraction.md` |
-| AI 输出归一化 | 已完成 | `script/normalize-ai-comment-extraction.js` |
-| 旧版评论 Excel 报表 | 已完成 | `script/build-comment-excel-report.js` |
+| AI 输出归一化 | 已完成 | `src/normalize/normalize-ai-comment-extraction.js` |
+| 旧版评论 Excel 报表 | 已完成 | `src/normalize/build-comment-excel-report.js` |
 
 下一阶段不重写这些能力，而是在其上补齐客户需求表解析、项目级运行目录、交付模板生成和 QA。
 
@@ -177,7 +177,7 @@ output/<project_id>/
 ### 4.1 项目初始化
 
 ```bash
-python script/parse_client_requirements.py \
+python src/pipeline/parse_client_requirements.py \
   --input "docs/米其林评论区分析KOL link-0630.xlsx" \
   --phase "KOL link-0630" \
   --out-dir output/michelin_kol_0630
@@ -240,7 +240,7 @@ node script/normalize-ai-comment-extraction.js \
 ### 4.5 项目级合并与 Excel 生成
 
 ```bash
-python script/build_client_comment_excel.py \
+python src/pipeline/build_client_comment_excel.py \
   --project-dir output/michelin_kol_0630 \
   --template docs/michelin_kol_comments_all_platforms_0630.xlsx \
   --out output/michelin_kol_0630/delivery.xlsx
@@ -260,7 +260,7 @@ python script/build_client_comment_excel.py \
 | 5 | 已完成 | 归一化携带客户上下文 | 很高 | 中 | 增强 `normalized-comments.jsonl` | 每条评论能回溯到客户表行和任务 |
 | 6 | 已完成 | 项目级合并脚本 | 高 | 低 | `all-normalized-comments.jsonl` | 多任务评论可合并、去重、保序 |
 | 7 | 已完成 | 交付 Excel 生成器 | 很高 | 中 | `src/pipeline/build_client_comment_excel.py`、`delivery.xlsx` | 生成 `汇总`、`阶段汇总`、`评论明细` |
-| 8 | 待开始 | 项目结构解耦与仓库瘦身 | 高 | 中 | 分层目录、归档目录、清理清单 | 脚本、测试、文档、样例数据分类清楚，删除或归档非必须文件 |
+| 8 | 已完成 | 项目结构解耦与仓库瘦身 | 高 | 中 | 分层目录、归档目录、清理清单 | 脚本、测试、文档、样例数据分类清楚，删除或归档非必须文件 |
 | 9 | 待开始 | QA 与差异标记 | 高 | 中 | `qa-summary.json`、Excel 状态列 | 识别 `ok/partial/failed` 和数量差异 |
 | 10 | 待开始 | 批量断点续跑 | 高 | 中 | `resume` 工作流 | 失败任务可重跑，不覆盖已完成任务 |
 | 11 | 待开始 | B站字段兼容 | 中 | 中 | B站 adapter 映射 | 兼容 `bilibili_comments_all_phases.xlsx` 的字段习惯 |
