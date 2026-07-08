@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.comment-crawler/schemas/comment-dom-batch.schema.json",
+  "title": "Comment DOM Batch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "batch_id",
+    "task_id",
+    "platform",
+    "source_url",
+    "captured_at",
+    "scroll",
+    "state",
+    "limits",
+    "candidates"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "comment-dom-batch-v1"
+    },
+    "batch_id": {
+      "type": "string"
+    },
+    "task_id": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["douyin", "xiaohongshu", "bilibili", "unknown"]
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "captured_at": {
+      "type": "string"
+    },
+    "scroll": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "before_top",
+        "after_top",
+        "viewport_height",
+        "document_height"
+      ],
+      "properties": {
+        "before_top": {
+          "type": "number",
+          "minimum": 0
+        },
+        "after_top": {
+          "type": "number",
+          "minimum": 0
+        },
+        "viewport_height": {
+          "type": "number",
+          "minimum": 0
+        },
+        "document_height": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "new_candidate_count",
+        "seen_candidate_count",
+        "has_more",
+        "stop_reason"
+      ],
+      "properties": {
+        "new_candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seen_candidate_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "has_more": {
+          "type": "boolean"
+        },
+        "stop_reason": {
+          "type": "string"
+        }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxCandidates",
+        "maxCharsPerCandidate"
+      ],
+      "properties": {
+        "maxCandidates": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxCharsPerCandidate": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidate_id",
+          "candidate_hash",
+          "dom_path",
+          "role_hint",
+          "inner_text",
+          "html",
+          "nearby_buttons",
+          "rect",
+          "captured_at"
+        ],
+        "properties": {
+          "candidate_id": {
+            "type": "string"
+          },
+          "candidate_hash": {
+            "type": "string"
+          },
+          "dom_path": {
+            "type": "string"
+          },
+          "role_hint": {
+            "type": "string",
+            "enum": ["comment_candidate", "reply_candidate", "unknown"]
+          },
+          "inner_text": {
+            "type": "string"
+          },
+          "html": {
+            "type": "string"
+          },
+          "nearby_buttons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rect": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["top", "left", "width", "height"],
+            "properties": {
+              "top": {
+                "type": "number"
+              },
+              "left": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number",
+                "minimum": 0
+              },
+              "height": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          },
+          "captured_at": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

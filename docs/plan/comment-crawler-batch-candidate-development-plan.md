@@ -586,7 +586,7 @@ test/pipeline/test_comment_excel_delivery_skill.py
 | 阶段 | 状态 | 任务 | 收益 | 成本 | 交付物 | 验收标准 |
 |---|---|---|---:|---:|---|---|
 | 0 | 已完成 | 明确 v2 契约和迁移边界 | 很高 | 低 | 本文档 | 不破坏现有 snapshot 主路径 |
-| 1 | 待开始 | 新增 `comment-dom-batch.schema.json` | 很高 | 低 | schema + schema test | batch/candidate 结构固定 |
+| 1 | 已完成 | 新增 `comment-dom-batch.schema.json` | 很高 | 低 | schema + schema test | batch/candidate 结构固定 |
 | 2 | 待开始 | 抽出 candidate 提取模块 | 很高 | 中 | `mcp/comment-crawler-candidates.js` | 可见候选、hash、去重、上限可测 |
 | 3 | 待开始 | 新增 MCP 单 batch 工具 | 很高 | 中 | `capture_comment_candidate_batch` | 可保存 `batches/batch_xxxx/comment-dom-batch.json` |
 | 4 | 待开始 | 新增 batch prompt | 高 | 低 | `prompts/comment-candidate-batch-extraction.md` | AI 输出引用 candidate_id |
