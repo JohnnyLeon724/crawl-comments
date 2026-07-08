@@ -115,6 +115,10 @@ function listTools() {
           runId: {
             type: 'string',
             description: 'Optional run id for deterministic output.'
+          },
+          closePageAfter: {
+            type: 'boolean',
+            description: 'Close the selected Chrome tab after the output is saved. Useful when running tasks one by one to avoid selecting the previous task page.'
           }
         },
         additionalProperties: false
@@ -130,7 +134,9 @@ function listTools() {
           errors: {
             type: 'array',
             items: { type: 'string' }
-          }
+          },
+          closedPage: { type: 'boolean' },
+          closePageError: { type: 'string' }
         },
         required: ['status', 'runId', 'outDir', 'rawCommentCount', 'outputFiles', 'errors']
       }
@@ -213,6 +219,10 @@ function listTools() {
           includeText: {
             type: 'boolean',
             description: 'Whether to include visible text in chunks.'
+          },
+          closePageAfter: {
+            type: 'boolean',
+            description: 'Close the selected Chrome tab after the DOM snapshot is saved. Use on the final per-task MCP step before moving to the next URL.'
           }
         },
         additionalProperties: false
@@ -228,6 +238,8 @@ function listTools() {
           url: { type: 'string' },
           chunkCount: { type: 'number' },
           truncated: { type: 'boolean' },
+          closedPage: { type: 'boolean' },
+          closePageError: { type: 'string' },
           chunks: {
             type: 'array',
             items: { type: 'object' }
@@ -299,6 +311,29 @@ function buildExpandSummary(payload, pageUrl) {
     rounds: Number(state.round) || 0,
     totalErrors: Number(state.totalErrors) || 0
   };
+}
+
+async function closePageIfRequested(page, args = {}) {
+  if (!args.closePageAfter) {
+    return {};
+  }
+
+  if (!page || typeof page.close !== 'function') {
+    return {
+      closedPage: false,
+      closePageError: '当前 CDP page 不支持 close()'
+    };
+  }
+
+  try {
+    await page.close({ runBeforeUnload: false });
+    return { closedPage: true };
+  } catch (error) {
+    return {
+      closedPage: false,
+      closePageError: error && error.message ? error.message : String(error)
+    };
+  }
 }
 
 async function expandCurrentPageComments(args = {}, context = {}) {
@@ -376,13 +411,18 @@ async function saveCurrentPageComments(args = {}, context = {}) {
       args.outDir || path.join('output', runId)
     );
 
-    return output.writeCommentRunOutput({
+    const result = await output.writeCommentRunOutput({
       payload,
       page,
       sourceUrl,
       outDir,
       runId
     });
+    const closeResult = await closePageIfRequested(page, args);
+    return {
+      ...result,
+      ...closeResult
+    };
   } finally {
     if (session && typeof session.close === 'function') {
       await session.close();
@@ -447,7 +487,7 @@ async function captureCurrentCommentDomSnapshot(args = {}, context = {}) {
     fs.mkdirSync(outDir, { recursive: true });
     output.writeJson(snapshotFile, snapshot);
 
-    return {
+    const result = {
       status: 'success',
       runId,
       outDir,
@@ -457,6 +497,11 @@ async function captureCurrentCommentDomSnapshot(args = {}, context = {}) {
       chunkCount: Array.isArray(snapshot.chunks) ? snapshot.chunks.length : 0,
       truncated: Boolean(snapshot.truncated),
       chunks: Array.isArray(snapshot.chunks) ? snapshot.chunks : []
+    };
+    const closeResult = await closePageIfRequested(page, args);
+    return {
+      ...result,
+      ...closeResult
     };
   } finally {
     if (session && typeof session.close === 'function') {
@@ -503,6 +548,7 @@ module.exports = {
   listTools,
   buildToolResult,
   readExpanderScript,
+  closePageIfRequested,
   buildExpandSummary,
   expandCurrentPageComments,
   readCurrentPagePayload,

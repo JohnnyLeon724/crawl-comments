@@ -25,10 +25,11 @@ For each `runs/<task_id>/task.json`:
 
 1. Open the task URL in the logged-in browser.
 2. Use the comment-crawler MCP to expand comments and replies.
-3. Capture `comment-dom-snapshot.json`.
-4. Read `prompts/comment-dom-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
-5. Have AI output `ai-comment-extraction.json`.
-6. Normalize:
+3. Save the raw payload if a fallback/debug copy is needed.
+4. Capture `comment-dom-snapshot.json`. On the final MCP call for this task, pass `closePageAfter: true` so the selected Chrome tab closes before the next task opens.
+5. Read `prompts/comment-dom-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
+6. Have AI output `ai-comment-extraction.json`.
+7. Normalize:
 
 ```bash
 node script/normalize-ai-comment-extraction.js \

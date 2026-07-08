@@ -396,6 +396,47 @@ test('stage 5 saves the current page comment payload to CLI-compatible output fi
   ]);
 });
 
+test('save_current_page_comments can close the selected page after saving output', async () => {
+  const tools = require(toolsPath);
+  const listed = tools.listTools();
+  const saveTool = listed.find(tool => tool.name === 'save_current_page_comments');
+  assert.equal(saveTool.inputSchema.properties.closePageAfter.type, 'boolean');
+
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const outDir = path.join(projectRoot, 'output', 'run_close_001');
+  const calls = [];
+  const page = {
+    url: () => 'https://www.douyin.com/video/123',
+    evaluate: async () => ({
+      state: { stopReason: 'idle' },
+      config: {},
+      results: [{ row_type: 'level1', text: '评论' }]
+    }),
+    screenshot: async () => calls.push(['screenshot']),
+    close: async options => calls.push(['pageClose', options.runBeforeUnload])
+  };
+
+  const result = await tools.callTool('save_current_page_comments', {
+    outDir,
+    runId: 'run_close_001',
+    closePageAfter: true
+  }, {
+    connectToCdp: async () => ({
+      page,
+      close: async () => calls.push(['sessionClose'])
+    }),
+    projectRoot
+  });
+
+  assert.equal(result.structuredContent.status, 'success');
+  assert.equal(result.structuredContent.closedPage, true);
+  assert.deepEqual(calls, [
+    ['screenshot'],
+    ['pageClose', false],
+    ['sessionClose']
+  ]);
+});
+
 test('stage 6 normalizes a saved comment run through the MCP tool', async () => {
   const tools = require(toolsPath);
   const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
@@ -539,6 +580,53 @@ test('stage 10 captures current page comment DOM snapshot through the MCP tool',
     ['connect', 30000],
     ['capture', 2, 1000],
     ['close']
+  ]);
+});
+
+test('capture_current_comment_dom_snapshot can close the selected page after writing snapshot', async () => {
+  const tools = require(toolsPath);
+  const listed = tools.listTools();
+  const captureTool = listed.find(tool => tool.name === 'capture_current_comment_dom_snapshot');
+  assert.equal(captureTool.inputSchema.properties.closePageAfter.type, 'boolean');
+
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const outDir = path.join(projectRoot, 'output', 'run_snapshot_close_001');
+  const calls = [];
+  const page = {
+    url: () => 'https://www.douyin.com/video/123',
+    close: async options => calls.push(['pageClose', options.runBeforeUnload])
+  };
+
+  const result = await tools.callTool('capture_current_comment_dom_snapshot', {
+    outDir,
+    runId: 'run_snapshot_close_001',
+    closePageAfter: true
+  }, {
+    connectToCdp: async () => ({
+      page,
+      close: async () => calls.push(['sessionClose'])
+    }),
+    captureCommentDomSnapshot: async () => {
+      calls.push(['capture']);
+      return {
+        schema_version: 'comment-dom-snapshot-v1',
+        platform: 'douyin',
+        source_url: 'https://www.douyin.com/video/123',
+        captured_at: '2026-07-08T04:00:00.000Z',
+        limits: {},
+        truncated: false,
+        chunks: []
+      };
+    },
+    projectRoot
+  });
+
+  assert.equal(result.structuredContent.status, 'success');
+  assert.equal(result.structuredContent.closedPage, true);
+  assert.deepEqual(calls, [
+    ['capture'],
+    ['pageClose', false],
+    ['sessionClose']
   ]);
 });
 

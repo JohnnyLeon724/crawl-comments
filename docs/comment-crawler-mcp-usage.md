@@ -9,7 +9,7 @@
 | 工具 | 用途 | 输出 |
 |---|---|---|
 | `get_comment_crawler_status` | 检查 MCP server 状态 | server 版本、项目目录 |
-| `expand_current_page_comments` | 连接当前 Chrome CDP 页面，注入 `script/expand-comments-v1.js` 展开和下滚评论 | `stopReason`、评论数、点击数、轮次 |
+| `expand_current_page_comments` | 连接当前 Chrome CDP 页面，注入 `src/browser/expand-comments-v1.js` 展开和下滚评论 | `stopReason`、评论数、点击数、轮次 |
 | `capture_current_comment_dom_snapshot` | 读取当前页面有限 DOM chunks，供 AI 结构化提取评论字段 | `output/<run_id>/comment-dom-snapshot.json` |
 | `save_current_page_comments` | 读取页面里的 expander payload 并保存到项目本地 | `output/<run_id>/raw-comments.json`、CSV、manifest、截图 |
 | `normalize_comment_run` | 调用现有 normalizer，把 raw 转成统一 JSONL | `normalized-comments.jsonl` |
@@ -96,9 +96,12 @@ args = ["/Users/gyp/Documents/demo/mcp/comment-crawler-server.js"]
   "maxChunks": 120,
   "maxCharsPerChunk": 3000,
   "includeHtml": true,
-  "includeText": true
+  "includeText": true,
+  "closePageAfter": true
 }
 ```
+
+`closePageAfter: true` 用在每个任务最后一次 MCP 页面操作上。它会在 snapshot 或 raw 保存完成后关闭当前 Chrome tab，避免下一条链接打开后 MCP 仍然选中上一条任务页面。
 
 4. 让 AI 读取 `prompts/comment-dom-extraction.md` 和 `comment-dom-snapshot.json`，输出：
 
@@ -121,7 +124,8 @@ node script/normalize-ai-comment-extraction.js \
 {
   "cdpEndpoint": "http://127.0.0.1:9222",
   "outDir": "output/douyin_mcp_test_001",
-  "runId": "douyin_mcp_test_001"
+  "runId": "douyin_mcp_test_001",
+  "closePageAfter": true
 }
 ```
 
