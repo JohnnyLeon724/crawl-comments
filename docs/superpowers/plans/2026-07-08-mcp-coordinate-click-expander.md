@@ -1103,7 +1103,7 @@ git commit -m "feat：接入MCP坐标点击主流程"
 - Consumes: `comment-excel-delivery` skill docs.
 - Produces: workflow docs that mention `clickMode: "coordinate"` and fallback behavior.
 
-- [ ] **Step 1: Write the failing documentation test**
+- [x] **Step 1: Write the failing documentation test**
 
 In `test/pipeline/test_comment_excel_delivery_skill.py`, add:
 
@@ -1118,7 +1118,7 @@ def test_comment_excel_delivery_documents_coordinate_click_mode():
     assert '"fallbackClickMode": "dom-click"' in workflow
 ```
 
-- [ ] **Step 2: Run the failing documentation test**
+- [x] **Step 2: Run the failing documentation test**
 
 Run:
 
@@ -1128,7 +1128,7 @@ src/pipeline/.venv/bin/python -m unittest test.pipeline.test_comment_excel_deliv
 
 Expected: FAIL because the docs do not mention coordinate click mode.
 
-- [ ] **Step 3: Update skill docs**
+- [x] **Step 3: Update skill docs**
 
 In `.codex/skills/comment-excel-delivery/SKILL.md`, change the browser-tool bullet to:
 
@@ -1158,7 +1158,7 @@ Add this sentence after the example:
 Coordinate clicking is used for production interaction compatibility. If coordinate input is unavailable, the MCP tool falls back to `dom-click`; login, CAPTCHA, or verification pages should stop the run for user action.
 ```
 
-- [ ] **Step 4: Run the documentation test**
+- [x] **Step 4: Run the documentation test**
 
 Run:
 
@@ -1168,7 +1168,7 @@ src/pipeline/.venv/bin/python -m unittest test.pipeline.test_comment_excel_deliv
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .codex/skills/comment-excel-delivery/SKILL.md .codex/skills/comment-excel-delivery/references/workflow.md test/pipeline/test_comment_excel_delivery_skill.py
