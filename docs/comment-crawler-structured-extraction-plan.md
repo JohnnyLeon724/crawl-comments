@@ -294,7 +294,7 @@ script/normalize-ai-comment-extraction.js
 | 4 | 已完成 | 实现 `capture_current_comment_dom_snapshot` | 很高 | 中 | MCP tool | 当前页面可返回并保存 bounded DOM chunks |
 | 5 | 已完成 | DOM 裁剪和噪声压缩 | 很高 | 中 | snapshot extractor | 不返回整页 DOM，去除 script/style/svg，限制 chunk 大小 |
 | 6 | 已完成 | AI 结构化 prompt 模板 | 高 | 低 | `prompts/comment-dom-extraction.md` | 能指导 AI 从 chunks 输出 schema JSON |
-| 7 | 待开始 | AI 输出归一化脚本 | 高 | 中 | `normalize-ai-comment-extraction.js` | AI JSON 可转现有 `normalized-comments.jsonl` |
+| 7 | 已完成 | AI 输出归一化脚本 | 高 | 中 | `normalize-ai-comment-extraction.js` | AI JSON 可转现有 `normalized-comments.jsonl` |
 | 8 | 待开始 | 抖音样本验收 | 高 | 中 | fixture + 手工记录 | 抽样 20 条，正文污染显著下降 |
 | 9 | 待开始 | 小红书样本验收 | 高 | 中 | fixture + 手工记录 | 页脚、播放器、笔记正文不进入 rows |
 | 10 | 待开始 | Excel 字段扩展 | 中 | 低 | Excel report | 增加地区、置顶、作者、source chunk 等字段 |
