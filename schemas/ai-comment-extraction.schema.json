@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.comment-crawler/schemas/ai-comment-extraction.schema.json",
+  "title": "AI Comment Extraction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_url",
+    "rows",
+    "rejected"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "ai-comment-extraction-v1"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["douyin", "xiaohongshu", "unknown"]
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_chunk_id",
+          "row_type",
+          "user_name",
+          "text",
+          "created_at",
+          "ip_location",
+          "like_count",
+          "reply_to_user_name",
+          "root_text",
+          "is_pinned",
+          "is_author",
+          "confidence",
+          "evidence"
+        ],
+        "properties": {
+          "source_chunk_id": {
+            "type": "string"
+          },
+          "row_type": {
+            "type": "string",
+            "enum": ["level1", "level2"]
+          },
+          "user_name": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "ip_location": {
+            "type": "string"
+          },
+          "like_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reply_to_user_name": {
+            "type": "string"
+          },
+          "root_text": {
+            "type": "string"
+          },
+          "is_pinned": {
+            "type": "boolean"
+          },
+          "is_author": {
+            "type": "boolean"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "evidence": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rejected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source_chunk_id", "reason"],
+        "properties": {
+          "source_chunk_id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
