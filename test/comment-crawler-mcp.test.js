@@ -7,6 +7,7 @@ const test = require('node:test');
 
 const toolsPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-tools.js');
 const serverPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-server.js');
+const cdpPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-cdp.js');
 
 test('stage 2 exposes a comment crawler status tool', async () => {
   assert.equal(fs.existsSync(toolsPath), true);
@@ -108,4 +109,78 @@ test('stage 2 reports unknown MCP tools as JSON-RPC parameter errors', async () 
   assert.equal(response.id, 4);
   assert.equal(response.error.code, -32602);
   assert.match(response.error.message, /Unknown tool/);
+});
+
+test('stage 3 connects to Chrome CDP and disconnects without closing Chrome', async () => {
+  assert.equal(fs.existsSync(cdpPath), true);
+
+  const cdp = require(cdpPath);
+  const calls = [];
+  const targetPage = {
+    url: () => 'https://www.douyin.com/video/123',
+    title: async () => 'Douyin video',
+    evaluate: async () => '页面正文'
+  };
+  const browser = {
+    contexts: () => [
+      {
+        pages: () => [
+          { url: () => 'chrome://new-tab-page' },
+          targetPage
+        ]
+      }
+    ],
+    disconnect: () => calls.push('disconnect'),
+    close: async () => calls.push('close')
+  };
+  const playwright = {
+    chromium: {
+      connectOverCDP: async (endpoint, options) => {
+        calls.push(['connect', endpoint, options.timeout]);
+        return browser;
+      }
+    }
+  };
+
+  const session = await cdp.connectToCdp({
+    cdpEndpoint: 'http://127.0.0.1:9333',
+    timeoutMs: 1234,
+    playwright
+  });
+
+  assert.equal(session.page, targetPage);
+  assert.deepEqual(calls[0], ['connect', 'http://127.0.0.1:9333', 1234]);
+
+  await session.close();
+  assert.deepEqual(calls.slice(1), ['disconnect']);
+});
+
+test('stage 3 selects the latest HTTP page and reads a page snapshot', async () => {
+  assert.equal(fs.existsSync(cdpPath), true);
+
+  const cdp = require(cdpPath);
+  const pages = [
+    { url: () => 'about:blank' },
+    { url: () => 'https://www.xiaohongshu.com/explore/abc' },
+    { url: () => 'https://www.douyin.com/video/123' }
+  ];
+  const selected = await cdp.selectCurrentPage({
+    contexts: () => [
+      { pages: () => pages }
+    ]
+  });
+
+  assert.equal(selected, pages[2]);
+
+  const snapshot = await cdp.readPageSnapshot({
+    url: () => 'https://www.douyin.com/video/123',
+    title: async () => '标题',
+    evaluate: async () => '正文'
+  });
+
+  assert.deepEqual(snapshot, {
+    url: 'https://www.douyin.com/video/123',
+    title: '标题',
+    text: '正文'
+  });
 });
