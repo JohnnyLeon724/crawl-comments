@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.comment-crawler/schemas/crawl-task.schema.json",
+  "title": "Comment Crawl Task",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "task_id",
+    "phase",
+    "source_excel_row",
+    "source_index",
+    "platform",
+    "creator_name",
+    "published_at_text",
+    "source_url_text",
+    "source_url",
+    "exposure_count",
+    "engagement_count",
+    "expected_comment_count",
+    "status"
+  ],
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^task_\\d{4}$"
+    },
+    "phase": {
+      "type": "string"
+    },
+    "source_excel_row": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "source_index": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["douyin", "xiaohongshu", "bilibili", "weibo", "unknown"]
+    },
+    "creator_name": {
+      "type": "string"
+    },
+    "published_at_text": {
+      "type": "string"
+    },
+    "source_url_text": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string"
+    },
+    "exposure_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "engagement_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "expected_comment_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "running", "ok", "partial", "failed", "skipped"]
+    }
+  }
+}

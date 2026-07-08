@@ -253,7 +253,7 @@ python script/build_client_comment_excel.py \
 | 阶段 | 状态 | 任务 | 收益 | 成本 | 交付物 | 验收标准 |
 |---|---|---|---:|---:|---|---|
 | 0 | 已完成 | 明确半自动边界 | 很高 | 低 | 本文档方向 | 脚本管确定性，AI 管理解，MCP 管页面动作 |
-| 1 | 待开始 | 客户需求表解析 | 很高 | 低 | `parse_client_requirements.py`、`crawl-tasks.json` | 能从客户表生成任务，链接清洗正确 |
+| 1 | 已完成 | 客户需求表解析 | 很高 | 低 | `src/pipeline/parse_client_requirements.py`、`crawl-tasks.json` | 能从客户表生成任务，链接清洗正确 |
 | 2 | 待开始 | 任务运行目录规范 | 高 | 低 | `task.json`、`run-manifest.json` | 每条任务有独立目录和状态 |
 | 3 | 已完成 | MCP DOM snapshot | 很高 | 已投入 | `comment-dom-snapshot.json` | 当前页面可保存 bounded DOM chunks |
 | 4 | 已完成 | AI DOM 结构化契约 | 很高 | 已投入 | prompt + schema | AI 输出 rows/rejected 且可引用 chunk |
@@ -270,7 +270,7 @@ python script/build_client_comment_excel.py \
 
 第一轮只做确定性脚本，不碰新的浏览器自动化。
 
-1. `parse_client_requirements.py`
+1. `src/pipeline/parse_client_requirements.py`
    - 读取客户需求表。
    - 清洗链接文本。
    - 标准化平台名。

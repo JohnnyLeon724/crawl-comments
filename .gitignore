@@ -3,3 +3,5 @@ node_modules/
 .pw-profile/
 output/
 .agents/
+__pycache__/
+.venv/
