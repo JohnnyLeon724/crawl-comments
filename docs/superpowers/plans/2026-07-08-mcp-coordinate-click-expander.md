@@ -450,7 +450,7 @@ git commit -m "feat：增加展开按钮坐标发现"
   - `down(options = {})`
   - `up(options = {})`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add this test near existing raw CDP tests:
 
@@ -490,7 +490,7 @@ test('raw CDP page exposes Playwright-like mouse methods backed by Input.dispatc
 });
 ```
 
-- [ ] **Step 2: Run the failing test**
+- [x] **Step 2: Run the failing test**
 
 Run:
 
@@ -500,7 +500,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: FAIL because `createRawCdpPage` is not exported and raw page has no `mouse`.
 
-- [ ] **Step 3: Implement raw mouse support**
+- [x] **Step 3: Implement raw mouse support**
 
 In `mcp/comment-crawler-cdp.js`, inside `createRawCdpPage`, track mouse state:
 
@@ -557,7 +557,7 @@ Export `createRawCdpPage`:
 createRawCdpPage,
 ```
 
-- [ ] **Step 4: Run the test again**
+- [x] **Step 4: Run the test again**
 
 Run:
 
@@ -567,7 +567,7 @@ node --test --test-reporter=dot test/comment-crawler-mcp.test.js
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add mcp/comment-crawler-cdp.js test/comment-crawler-mcp.test.js
