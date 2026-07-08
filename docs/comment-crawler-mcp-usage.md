@@ -1,0 +1,185 @@
+# 评论采集 MCP 使用说明
+
+更新时间：2026-07-08
+
+## 1. 当前能力
+
+当前 MCP server 已实现 4 个工具：
+
+| 工具 | 用途 | 输出 |
+|---|---|---|
+| `get_comment_crawler_status` | 检查 MCP server 状态 | server 版本、项目目录 |
+| `expand_current_page_comments` | 连接当前 Chrome CDP 页面，注入 `script/expand-comments-v1.js` 展开和下滚评论 | `stopReason`、评论数、点击数、轮次 |
+| `save_current_page_comments` | 读取页面里的 expander payload 并保存到项目本地 | `output/<run_id>/raw-comments.json`、CSV、manifest、截图 |
+| `normalize_comment_run` | 调用现有 normalizer，把 raw 转成统一 JSONL | `normalized-comments.jsonl` |
+
+MCP 第一版只支持当前页面串行执行，默认只允许处理抖音和小红书页面，所有输出必须位于项目 `output/` 目录内。
+
+## 2. 启动 Chrome CDP
+
+推荐使用一个专用 Chrome profile。首次登录一次后，后续可以复用这个 profile 的登录态。
+
+```bash
+mkdir -p "$HOME/.comment-crawler-chrome-profile"
+
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.comment-crawler-chrome-profile"
+```
+
+打开后，在这个 Chrome 窗口里登录抖音或小红书，并进入目标笔记或视频页面。
+
+注意：
+
+- MCP 只能连接带 `--remote-debugging-port=9222` 启动的 Chrome。
+- 如果页面没登录，展开结果可能为空或采集到登录弹窗文本。
+- 如果当前 tab 不是目标页面，MCP 会操作当前 CDP session 选中的页面。
+
+## 3. 配置 Codex MCP Server
+
+MCP server 通过 stdio 启动，不需要 HTTP 服务。
+
+如果你的 Codex 配置使用 TOML，可以添加：
+
+```toml
+[mcp_servers.comment-crawler]
+command = "node"
+args = ["/Users/gyp/Documents/demo/mcp/comment-crawler-server.js"]
+```
+
+如果你的 Codex 客户端使用 JSON 形式，可以按同样含义配置：
+
+```json
+{
+  "mcpServers": {
+    "comment-crawler": {
+      "command": "node",
+      "args": [
+        "/Users/gyp/Documents/demo/mcp/comment-crawler-server.js"
+      ]
+    }
+  }
+}
+```
+
+配置后重启 Codex，确认能看到 `comment-crawler` 的工具列表。
+
+## 4. 推荐调用顺序
+
+在 Codex 中按这个顺序调用工具：
+
+1. 检查 MCP：
+
+```text
+调用 comment-crawler 的 get_comment_crawler_status
+```
+
+2. 展开当前 Chrome 页面评论：
+
+```text
+调用 comment-crawler 的 expand_current_page_comments，参数：
+{
+  "cdpEndpoint": "http://127.0.0.1:9222",
+  "timeoutMs": 600000
+}
+```
+
+3. 保存当前页面评论：
+
+```text
+调用 comment-crawler 的 save_current_page_comments，参数：
+{
+  "cdpEndpoint": "http://127.0.0.1:9222",
+  "outDir": "output/douyin_mcp_test_001",
+  "runId": "douyin_mcp_test_001"
+}
+```
+
+4. 归一化：
+
+```text
+调用 comment-crawler 的 normalize_comment_run，参数：
+{
+  "runDir": "output/douyin_mcp_test_001",
+  "platform": "douyin"
+}
+```
+
+小红书把 `platform` 改成 `xiaohongshu`，`outDir` 和 `runId` 换成自己的测试目录即可。
+
+## 5. 后处理命令
+
+MCP 当前只封装到归一化。AI 结构化和 Excel 报表继续复用现有脚本。
+
+准备 AI 审阅批次：
+
+```bash
+node script/prepare-comment-ai-review.js \
+  --input output/douyin_mcp_test_001/normalized-comments.jsonl \
+  --out-dir output/douyin_mcp_test_001/ai-review-input \
+  --batch-size 50
+```
+
+运行 AI 审阅：
+
+```bash
+node script/run-comment-ai-review.js \
+  --input-dir output/douyin_mcp_test_001/ai-review-input
+```
+
+生成 Excel：
+
+```bash
+node script/build-comment-excel-report.js \
+  --run-dir output/douyin_mcp_test_001
+```
+
+最终常见产物：
+
+```text
+output/douyin_mcp_test_001/
+  manifest.json
+  raw-comments.json
+  raw-comments.csv
+  final-page.png
+  normalized-comments.jsonl
+  ai-review-input/
+  comment-report.xlsx
+```
+
+## 6. 本地冒烟测试
+
+不连接浏览器时，可以直接验证 MCP server 的 JSON-RPC 基础链路：
+
+```bash
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_comment_crawler_status","arguments":{}}}' \
+  | node mcp/comment-crawler-server.js
+```
+
+项目单测：
+
+```bash
+node --test test/*.test.js
+```
+
+## 7. 常见问题
+
+| 现象 | 可能原因 | 处理 |
+|---|---|---|
+| 连接 CDP 失败 | Chrome 没用 `--remote-debugging-port=9222` 启动 | 重新按第 2 节启动 Chrome |
+| 评论数为 0 | 页面未登录、当前 tab 不对、页面评论未加载 | 在 CDP Chrome 中登录并切到目标页面 |
+| 保存时报“未找到 comment expander payload” | 还没运行展开工具，或页面刷新过 | 先重新调用 `expand_current_page_comments` |
+| 输出路径被拒绝 | `outDir` 不在项目 `output/` 下 | 使用 `output/<run_id>` |
+| 页面被拒绝 | 当前 URL 不是抖音或小红书域名 | 切到支持的平台页面 |
+| 小红书采到登录弹窗 | 专用 profile 未登录 | 在该 Chrome profile 里完成登录后重跑 |
+
+## 8. 安全边界
+
+- 不读取 Cookie、密码、账号信息。
+- 不绕过平台风控，不做多账号调度。
+- 不并发展开多个页面。
+- 不把结果写到项目外部目录。
+- AI 只处理已经保存到本地的归一化评论文本，不参与页面点击和滚动。

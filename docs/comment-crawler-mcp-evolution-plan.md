@@ -103,7 +103,7 @@ Chrome 插件不是第一版目标。
 | 5 | 已完成 | 实现 `save_current_page_comments` | 高 | 低 | MCP tool、`output/<run_id>/` | 当前页面 payload 可保存 raw JSON/CSV/manifest |
 | 6 | 已完成 | 实现 `normalize_comment_run` | 高 | 低 | MCP tool | 给定 run dir 和 platform，输出 `normalized-comments.jsonl` |
 | 7 | 已完成 | 补 MCP 安全边界与配置 | 高 | 低 | 配置、域名限制、输出限制 | 只写入项目 `output/`，不读取 Cookie，不并发执行 |
-| 8 | 待开始 | 写 Codex 使用说明 | 高 | 低 | docs 使用说明 | 用户知道如何启动 Chrome CDP、启用 MCP、运行工具 |
+| 8 | 已完成 | 写 Codex 使用说明 | 高 | 低 | docs 使用说明 | 用户知道如何启动 Chrome CDP、启用 MCP、运行工具 |
 | 9 | 待开始 | MCP 工具单测 | 中 | 中 | `test/comment-crawler-mcp.test.js` | mock CDP/page 时工具参数、输出、错误分支可测 |
 | 10 | 待开始 | 真实页面端到端验证 | 高 | 中 | 手工验收记录 | 抖音、小红书各跑 1 条，输出 raw 和 normalized |
 | 11 | 待开始 | AI 与 Excel MCP 化 | 中 | 中 | `prepare_ai_review`、`build_excel_report` tools | Codex 可从 run dir 直接生成 AI 批次和 Excel |
