@@ -1,0 +1,242 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" width="1400" height="900">
+<style>
+text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+.title { fill:#111827; font-size:26px; font-weight:700; }
+.subtitle { fill:#6b7280; font-size:14px; }
+.lane-title { fill:#374151; font-size:13px; font-weight:700; }
+.node-title { fill:#111827; font-weight:700; }
+.node-sub { fill:#4b5563; font-size:12px; }
+.arrow-label { font-size:12px; font-weight:600; }
+.legend-text { fill:#4b5563; font-size:12px; }
+</style>
+<defs>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+</marker>
+<marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#059669"/>
+</marker>
+<marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed"/>
+</marker>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+</marker>
+</defs>
+<rect width="1400" height="900" fill="#ffffff"/>
+<text x="40" y="46" class="title">评论采集与 Excel 交付系统架构</text>
+<text x="40" y="72" class="subtitle">当前实现：Codex Skill 编排、comment-crawler-v2 MCP、边展开边捕获 DOM 批次、AI 结构化、Node/Python 文件化交付流水线</text>
+<rect x="40" y="95" width="290" height="705" rx="10" fill="#eff6ff" fill-opacity="0.50" stroke="#bfdbfe" stroke-width="1.2" stroke-dasharray="7,5"/>
+<text x="56" y="119" class="lane-title">输入与编排</text>
+<rect x="370" y="95" width="300" height="705" rx="10" fill="#fff7ed" fill-opacity="0.50" stroke="#fed7aa" stroke-width="1.2" stroke-dasharray="7,5"/>
+<text x="386" y="119" class="lane-title">浏览器采集层</text>
+<rect x="710" y="95" width="300" height="705" rx="10" fill="#faf5ff" fill-opacity="0.50" stroke="#ddd6fe" stroke-width="1.2" stroke-dasharray="7,5"/>
+<text x="726" y="119" class="lane-title">AI 结构化与归一化</text>
+<rect x="1050" y="95" width="310" height="705" rx="10" fill="#f0fdf4" fill-opacity="0.50" stroke="#bbf7d0" stroke-width="1.2" stroke-dasharray="7,5"/>
+<text x="1066" y="119" class="lane-title">交付与复跑</text>
+<path class="arrow " d="M 180 220 L 180 260" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="153.0" y="232" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="180" y="246" text-anchor="middle" class="arrow-label" fill="#6b7280">启动流程</text>
+<path class="arrow " d="M 180 365 L 180 400" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="153.0" y="374" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="180" y="388" text-anchor="middle" class="arrow-label" fill="#6b7280">解析任务</text>
+<path class="arrow " d="M 280 448 L 350 448 L 350 180 L 410 180" fill="none" stroke="#ea580c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-orange)"/>
+<rect x="323.0" y="299" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="350" y="313" text-anchor="middle" class="arrow-label" fill="#9a3412">逐条调用</text>
+<path class="arrow " d="M 520 230 L 520 280" fill="none" stroke="#ea580c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-orange)"/>
+<rect x="493.0" y="244" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="520" y="258" text-anchor="middle" class="arrow-label" fill="#6b7280">CDP</text>
+<path class="arrow " d="M 520 370 L 520 420" fill="none" stroke="#ea580c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-orange)"/>
+<rect x="493.0" y="385" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="520" y="399" text-anchor="middle" class="arrow-label" fill="#6b7280">操作页面</text>
+<path class="arrow " d="M 520 510 L 520 560" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="489.0" y="526" width="62" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="520" y="540" text-anchor="middle" class="arrow-label" fill="#6b7280">可见 DOM</text>
+<path class="arrow " d="M 520 670 L 520 705" fill="none" stroke="#059669" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)" stroke-dasharray="5,3"/>
+<rect x="493.0" y="681" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="520" y="695" text-anchor="middle" class="arrow-label" fill="#047857">去重状态</text>
+<path class="arrow " d="M 630 615 L 690 615 L 690 330 L 760 330" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<rect x="663.0" y="471" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="690" y="485" text-anchor="middle" class="arrow-label" fill="#6d28d9">候选批次</text>
+<path class="arrow " d="M 865 225 L 865 280" fill="none" stroke="#7c3aed" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<rect x="838.0" y="242" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="865" y="256" text-anchor="middle" class="arrow-label" fill="#6d28d9">规则约束</text>
+<path class="arrow " d="M 865 375 L 865 430" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-purple)"/>
+<rect x="838.0" y="391" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="865" y="405" text-anchor="middle" class="arrow-label" fill="#6b7280">结构化</text>
+<path class="arrow " d="M 865 520 L 865 570" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="830.0" y="536" width="70" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="865" y="550" text-anchor="middle" class="arrow-label" fill="#6b7280">AI JSON</text>
+<path class="arrow " d="M 865 670 L 865 715" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="838.0" y="686" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="865" y="700" text-anchor="middle" class="arrow-label" fill="#6b7280">JSONL</text>
+<path class="arrow " d="M 970 745 L 1030 745 L 1030 200 L 1100 200" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="1003.0" y="461" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="1030" y="475" text-anchor="middle" class="arrow-label" fill="#6b7280">任务汇入</text>
+<path class="arrow " d="M 1205 240 L 1205 300" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="1178.0" y="260" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="1205" y="274" text-anchor="middle" class="arrow-label" fill="#6b7280">合并</text>
+<path class="arrow " d="M 1205 380 L 1205 440" fill="none" stroke="#059669" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<rect x="1178.0" y="400" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="1205" y="414" text-anchor="middle" class="arrow-label" fill="#6b7280">质检</text>
+<path class="arrow " d="M 1205 535 L 1205 600" fill="none" stroke="#059669" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-green)"/>
+<rect x="1178.0" y="560" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="1205" y="574" text-anchor="middle" class="arrow-label" fill="#6b7280">通过后</text>
+<path class="arrow " d="M 1205 680 L 1205 720" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-blue)"/>
+<rect x="1178.0" y="692" width="54" height="20" rx="10" fill="#ffffff" opacity="0.95" stroke="#e5e7eb" stroke-width="0.8"/>
+<text x="1205" y="706" text-anchor="middle" class="arrow-label" fill="#6b7280">生成</text>
+<path class="arrow " d="M 1190 440 L 1340 440 L 1340 88 L 180 88 L 180 140" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow-gray)" stroke-dasharray="5,4"/>
+<g class="node file-node">
+<path d="M 80,140 L 264,140 L 280,156 L 280,220 L 80,220 Z" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<path d="M 264,140 L 264,156 L 280,156" fill="#dcfce7" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="96" y1="196" x2="262" y2="196" stroke="#bbf7d0" stroke-width="1" opacity="0.6"/>
+<text x="180.0" y="169" text-anchor="middle" class="node-title" font-size="14">客户输入表</text>
+<text x="180.0" y="189" text-anchor="middle" class="node-sub">需求 Excel / 发布链接</text>
+<text x="180.0" y="206" text-anchor="middle" class="node-sub">评论数与基础指标</text>
+</g>
+<g class="node hex-node">
+<polygon points="180.0,251.0 235.4,283.0 235.4,347.0 180.0,379.0 124.6,347.0 124.6,283.0" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.8"/>
+<text x="180" y="310" text-anchor="middle" class="node-title" font-size="14">Codex Skill</text>
+<text x="180" y="330" text-anchor="middle" class="node-sub">comment-excel-delivery</text>
+<text x="180" y="347" text-anchor="middle" class="node-sub">半自动任务编排</text>
+</g>
+<g class="node file-node">
+<path d="M 80,400 L 264,400 L 280,416 L 280,495 L 80,495 Z" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<path d="M 264,400 L 264,416 L 280,416" fill="#dcfce7" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="96" y1="471" x2="262" y2="471" stroke="#bbf7d0" stroke-width="1" opacity="0.6"/>
+<text x="180.0" y="429" text-anchor="middle" class="node-title" font-size="14">任务清单</text>
+<text x="180.0" y="449" text-anchor="middle" class="node-sub">crawl-tasks.json</text>
+<text x="180.0" y="466" text-anchor="middle" class="node-sub">runs/&lt;task_id&gt;/task.json</text>
+</g>
+<g class="node ">
+<rect x="80" y="560" width="200" height="80" rx="8" ry="8" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6,4"/>
+<text x="180.0" y="589" text-anchor="middle" class="node-title" font-size="14">历史交付导入</text>
+<text x="180.0" y="609" text-anchor="middle" class="node-sub">import_bilibili_delivery.py</text>
+<text x="180.0" y="626" text-anchor="middle" class="node-sub">B站历史表复用</text>
+</g>
+<g class="node hex-node">
+<polygon points="520.0,110.0 580.6,145.0 580.6,215.0 520.0,250.0 459.4,215.0 459.4,145.0" fill="#fff7ed" stroke="#fdba74" stroke-width="1.8"/>
+<text x="520" y="175" text-anchor="middle" class="node-title" font-size="14">MCP v2</text>
+<text x="520" y="195" text-anchor="middle" class="node-sub">expand_and_capture</text>
+<text x="520" y="212" text-anchor="middle" class="node-sub">mcp/comment-crawler-tools.js</text>
+</g>
+<g class="node browser-node">
+<rect x="410" y="280" width="220" height="90" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<rect x="410" y="280" width="220" height="22" rx="8" fill="#dbeafe"/>
+<rect x="410" y="294" width="220" height="8" fill="#dbeafe"/>
+<circle cx="426" cy="291" r="4" fill="#ef4444" opacity="0.85"/>
+<circle cx="440" cy="291" r="4" fill="#f59e0b" opacity="0.85"/>
+<circle cx="454" cy="291" r="4" fill="#10b981" opacity="0.85"/>
+<text x="520.0" y="329" text-anchor="middle" class="node-title" font-size="15">Chrome CDP</text>
+<text x="520.0" y="349" text-anchor="middle" class="node-sub">登录态浏览器</text>
+<text x="520.0" y="366" text-anchor="middle" class="node-sub">Playwright connectOverCDP</text>
+</g>
+<g class="node ">
+<rect x="410" y="420" width="220" height="90" rx="8" ry="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="520.0" y="449" text-anchor="middle" class="node-title" font-size="15">平台页面</text>
+<text x="520.0" y="469" text-anchor="middle" class="node-sub">抖音 / 小红书</text>
+<text x="520.0" y="486" text-anchor="middle" class="node-sub">展开回复 + 下滚补货</text>
+</g>
+<g class="node file-node">
+<path d="M 410,560 L 614,560 L 630,576 L 630,670 L 410,670 Z" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<path d="M 614,560 L 614,576 L 630,576" fill="#dcfce7" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="426" y1="646" x2="612" y2="646" stroke="#bbf7d0" stroke-width="1" opacity="0.6"/>
+<text x="520.0" y="589" text-anchor="middle" class="node-title" font-size="14">DOM 候选批次</text>
+<text x="520.0" y="609" text-anchor="middle" class="node-sub">batches/&lt;batch_id&gt;/</text>
+<text x="520.0" y="626" text-anchor="middle" class="node-sub">comment-dom-batch.json</text>
+<text x="520.0" y="643" text-anchor="middle" class="node-sub">bounded candidates</text>
+</g>
+<g class="node cylinder-node">
+<ellipse cx="520.0" cy="717" rx="110.0" ry="12" fill="#f0fdfa" stroke="#99f6e4" stroke-width="1.5"/>
+<rect x="410" y="717" width="220" height="36" fill="#f0fdfa" stroke="none"/>
+<line x1="410" y1="717" x2="410" y2="753" stroke="#99f6e4" stroke-width="1.5"/>
+<line x1="630" y1="717" x2="630" y2="753" stroke="#99f6e4" stroke-width="1.5"/>
+<ellipse cx="520.0" cy="753" rx="110.0" ry="12" fill="#ccfbf1" stroke="#99f6e4" stroke-width="1.5"/>
+<text x="520.0" y="739" text-anchor="middle" class="node-title" font-size="14">capture-state</text>
+<text x="520.0" y="759" text-anchor="middle" class="node-sub">seen hashes / next batch</text>
+</g>
+<g class="node file-node">
+<path d="M 760,140 L 954,140 L 970,156 L 970,225 L 760,225 Z" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<path d="M 954,140 L 954,156 L 970,156" fill="#dcfce7" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="776" y1="201" x2="952" y2="201" stroke="#bbf7d0" stroke-width="1" opacity="0.6"/>
+<text x="865.0" y="169" text-anchor="middle" class="node-title" font-size="14">提示词与 Schema</text>
+<text x="865.0" y="189" text-anchor="middle" class="node-sub">prompts/comment-candidate</text>
+<text x="865.0" y="206" text-anchor="middle" class="node-sub">schemas/ai-comment-extraction</text>
+</g>
+<g class="node hex-node">
+<polygon points="865.0,258.0 927.4,294.0 927.4,366.0 865.0,402.0 802.6,366.0 802.6,294.0" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.8"/>
+<text x="865" y="325" text-anchor="middle" class="node-title" font-size="14">AI 提取</text>
+<text x="865" y="345" text-anchor="middle" class="node-sub">页面理解</text>
+<text x="865" y="362" text-anchor="middle" class="node-sub">用户名 / 正文 / 时间地区</text>
+</g>
+<g class="node file-node">
+<path d="M 760,430 L 954,430 L 970,446 L 970,520 L 760,520 Z" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<path d="M 954,430 L 954,446 L 970,446" fill="#dcfce7" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="776" y1="496" x2="952" y2="496" stroke="#bbf7d0" stroke-width="1" opacity="0.6"/>
+<text x="865.0" y="459" text-anchor="middle" class="node-title" font-size="14">AI 结构化结果</text>
+<text x="865.0" y="479" text-anchor="middle" class="node-sub">ai-comment-extraction.json</text>
+<text x="865.0" y="496" text-anchor="middle" class="node-sub">source_chunk_id 可追溯</text>
+</g>
+<g class="node ">
+<rect x="760" y="570" width="210" height="100" rx="8" ry="8" fill="#f5f3ff" stroke="#ddd6fe" stroke-width="1.5"/>
+<text x="865.0" y="599" text-anchor="middle" class="node-title" font-size="15">Node 归一化</text>
+<text x="865.0" y="619" text-anchor="middle" class="node-sub">normalize-ai-comment</text>
+<text x="865.0" y="636" text-anchor="middle" class="node-sub">adapters/douyin,xhs</text>
+</g>
+<g class="node file-node">
+<path d="M 760,715 L 954,715 L 970,731 L 970,775 L 760,775 Z" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<path d="M 954,715 L 954,731 L 970,731" fill="#dcfce7" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="776" y1="751" x2="952" y2="751" stroke="#bbf7d0" stroke-width="1" opacity="0.6"/>
+<text x="865.0" y="744" text-anchor="middle" class="node-title" font-size="14">标准评论 JSONL</text>
+<text x="865.0" y="764" text-anchor="middle" class="node-sub">normalized-comments.jsonl</text>
+</g>
+<g class="node ">
+<rect x="1100" y="160" width="210" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="1205.0" y="189" text-anchor="middle" class="node-title" font-size="15">任务级合并</text>
+<text x="1205.0" y="209" text-anchor="middle" class="node-sub">merge_task_batches.py</text>
+<text x="1205.0" y="226" text-anchor="middle" class="node-sub">去重后 task JSONL</text>
+</g>
+<g class="node ">
+<rect x="1100" y="300" width="210" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="1205.0" y="329" text-anchor="middle" class="node-title" font-size="15">项目级合并</text>
+<text x="1205.0" y="349" text-anchor="middle" class="node-sub">merge_comment_runs.py</text>
+<text x="1205.0" y="366" text-anchor="middle" class="node-sub">all-normalized-comments</text>
+</g>
+<g class="node ">
+<rect x="1100" y="440" width="210" height="95" rx="8" ry="8" fill="#ecfdf5" stroke="#86efac" stroke-width="1.5"/>
+<text x="1205.0" y="469" text-anchor="middle" class="node-title" font-size="15">QA 与断点恢复</text>
+<text x="1205.0" y="489" text-anchor="middle" class="node-sub">qa_comment_delivery.py</text>
+<text x="1205.0" y="506" text-anchor="middle" class="node-sub">batch_summary / resume_plan</text>
+</g>
+<g class="node ">
+<rect x="1100" y="600" width="210" height="80" rx="8" ry="8" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<text x="1205.0" y="629" text-anchor="middle" class="node-title" font-size="15">Excel 构建</text>
+<text x="1205.0" y="649" text-anchor="middle" class="node-sub">build_client_comment_excel.py</text>
+<text x="1205.0" y="666" text-anchor="middle" class="node-sub">模板列映射与汇总</text>
+</g>
+<g class="node file-node">
+<path d="M 1100,720 L 1294,720 L 1310,736 L 1310,780 L 1100,780 Z" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.5"/>
+<path d="M 1294,720 L 1294,736 L 1310,736" fill="#dcfce7" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="1116" y1="756" x2="1292" y2="756" stroke="#bbf7d0" stroke-width="1" opacity="0.6"/>
+<text x="1205.0" y="749" text-anchor="middle" class="node-title" font-size="14">交付文件</text>
+<text x="1205.0" y="769" text-anchor="middle" class="node-sub">delivery.xlsx</text>
+</g>
+<g transform="translate(40,830)">
+<rect x="0" y="0" width="1320" height="48" rx="8" fill="#f9fafb" stroke="#e5e7eb"/>
+<text x="18" y="29" class="legend-text" font-weight="700">图例</text>
+<path d="M 86 24 L 128 24" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<text x="138" y="28" class="legend-text">主数据流</text>
+<path d="M 230 24 L 272 24" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="282" y="28" class="legend-text">浏览器控制</text>
+<path d="M 392 24 L 434 24" fill="none" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<text x="444" y="28" class="legend-text">AI 结构化</text>
+<path d="M 558 24 L 600 24" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)" stroke-dasharray="5,3"/>
+<text x="610" y="28" class="legend-text">状态/QA 写入</text>
+<path d="M 738 24 L 780 24" fill="none" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow-gray)" stroke-dasharray="5,4"/>
+<text x="790" y="28" class="legend-text">复跑反馈</text>
+<text x="1010" y="28" class="legend-text">产物目录：output/&lt;project_id&gt;/runs/&lt;task_id&gt;/...</text>
+</g>
+</svg>
