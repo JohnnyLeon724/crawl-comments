@@ -1,0 +1,197 @@
+import argparse
+import json
+from collections import Counter, defaultdict
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+
+COMMENT_COUNT_THRESHOLD = 0.8
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped:
+            rows.append(json.loads(stripped))
+    return rows
+
+
+def read_tasks(project_dir: Path) -> list[dict[str, Any]]:
+    payload = read_json(project_dir / "crawl-tasks.json")
+    tasks = payload.get("tasks") if isinstance(payload, dict) else []
+    return [task for task in tasks if isinstance(task, dict)]
+
+
+def group_comments_by_task(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        task_id = str(row.get("task_id") or "")
+        if task_id:
+            grouped[task_id].append(row)
+    return grouped
+
+
+def count_rows(rows: list[dict[str, Any]], row_type: str) -> int:
+    return len([row for row in rows if row.get("row_type") == row_type])
+
+
+def has_time_or_location(row: dict[str, Any]) -> bool:
+    raw_ai_row = row.get("raw", {}).get("ai_row", {}) if isinstance(row.get("raw"), dict) else {}
+    return bool(
+        row.get("created_at")
+        or row.get("ip_location")
+        or raw_ai_row.get("created_at")
+        or raw_ai_row.get("ip_location")
+    )
+
+
+def has_source_chunk(row: dict[str, Any]) -> bool:
+    raw = row.get("raw", {}) if isinstance(row.get("raw"), dict) else {}
+    ai_row = raw.get("ai_row", {}) if isinstance(raw.get("ai_row"), dict) else {}
+    return bool(row.get("source_chunk_id") or ai_row.get("source_chunk_id"))
+
+
+def requires_source_chunk(row: dict[str, Any]) -> bool:
+    raw = row.get("raw", {}) if isinstance(row.get("raw"), dict) else {}
+    return isinstance(raw.get("ai_row"), dict)
+
+
+def build_notes(issues: list[str], metrics: dict[str, Any]) -> str:
+    notes: list[str] = []
+    if "no_comments_collected" in issues:
+        notes.append("未采集到评论")
+    elif "comment_count_below_threshold" in issues:
+        notes.append(
+            f"评论数低于客户表 80%：{metrics['actual_comment_count']}/{metrics['expected_comment_count']}"
+        )
+    if "empty_text" in issues:
+        notes.append(f"{metrics['empty_text_count']} 条评论正文为空")
+    if "missing_user_name" in issues:
+        notes.append(f"{metrics['missing_user_name_count']} 条缺少用户名")
+    if "missing_time_or_location" in issues:
+        notes.append(f"{metrics['missing_time_or_location_count']} 条缺少时间或地区")
+    if "missing_source_chunk" in issues:
+        notes.append(f"{metrics['missing_source_chunk_count']} 条缺少 DOM chunk 证据")
+    return "；".join(notes)
+
+
+def build_task_qa(task: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+    expected = int(task.get("expected_comment_count") or 0)
+    actual = len(rows)
+    empty_text_count = len([row for row in rows if not str(row.get("text") or "").strip()])
+    missing_user_name_count = len([row for row in rows if not str(row.get("user_name") or "").strip()])
+    missing_time_or_location_count = len([row for row in rows if not has_time_or_location(row)])
+    missing_source_chunk_count = len([
+        row for row in rows
+        if requires_source_chunk(row) and not has_source_chunk(row)
+    ])
+    issues: list[str] = []
+
+    if expected and actual == 0:
+        issues.append("no_comments_collected")
+    elif expected and actual / expected < COMMENT_COUNT_THRESHOLD:
+        issues.append("comment_count_below_threshold")
+
+    if empty_text_count:
+        issues.append("empty_text")
+    if missing_user_name_count:
+        issues.append("missing_user_name")
+    if missing_time_or_location_count:
+        issues.append("missing_time_or_location")
+    if missing_source_chunk_count:
+        issues.append("missing_source_chunk")
+
+    if "no_comments_collected" in issues:
+        status = "failed"
+    elif issues:
+        status = "partial"
+    else:
+        status = "ok"
+
+    metrics = {
+        "expected_comment_count": expected,
+        "actual_comment_count": actual,
+        "level1_count": count_rows(rows, "level1"),
+        "level2_count": count_rows(rows, "level2"),
+        "empty_text_count": empty_text_count,
+        "missing_user_name_count": missing_user_name_count,
+        "missing_time_or_location_count": missing_time_or_location_count,
+        "missing_source_chunk_count": missing_source_chunk_count,
+    }
+
+    return {
+        "task_id": str(task.get("task_id") or ""),
+        "phase": task.get("phase", ""),
+        "platform": task.get("platform", ""),
+        "status": status,
+        "issues": issues,
+        "notes": build_notes(issues, metrics),
+        **metrics,
+    }
+
+
+def project_status(status_counts: Counter[str], total_tasks: int) -> str:
+    if total_tasks and status_counts.get("failed", 0) == total_tasks:
+        return "failed"
+    if status_counts.get("failed", 0) or status_counts.get("partial", 0):
+        return "partial"
+    return "ok"
+
+
+def build_qa_summary(project_dir: str | Path, out: str | Path | None = None) -> dict[str, Any]:
+    root = Path(project_dir)
+    tasks = read_tasks(root)
+    comments = read_jsonl(root / "all-normalized-comments.jsonl")
+    comments_by_task = group_comments_by_task(comments)
+    task_results = [
+        build_task_qa(task, comments_by_task.get(str(task.get("task_id") or ""), []))
+        for task in tasks
+    ]
+    status_counts = Counter(task["status"] for task in task_results)
+    summary = {
+        "schema_version": "comment-delivery-qa-v1",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "status": project_status(status_counts, len(task_results)),
+        "total_tasks": len(task_results),
+        "ok_count": status_counts.get("ok", 0),
+        "partial_count": status_counts.get("partial", 0),
+        "failed_count": status_counts.get("failed", 0),
+        "total_expected_comment_count": sum(task["expected_comment_count"] for task in task_results),
+        "total_actual_comment_count": sum(task["actual_comment_count"] for task in task_results),
+        "tasks": task_results,
+    }
+
+    if out:
+        output_path = Path(out)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    return summary
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build project-level QA summary for normalized comment delivery.")
+    parser.add_argument("--project-dir", required=True, help="Project directory containing crawl-tasks.json and all-normalized-comments.jsonl.")
+    parser.add_argument("--out", default="", help="Output qa-summary.json path. Defaults to <project-dir>/qa-summary.json.")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    out = args.out or str(Path(args.project_dir) / "qa-summary.json")
+    summary = build_qa_summary(args.project_dir, out)
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

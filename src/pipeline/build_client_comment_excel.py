@@ -77,6 +77,20 @@ def read_tasks(project_dir: Path) -> list[dict[str, Any]]:
     return [task for task in tasks if isinstance(task, dict)]
 
 
+def read_qa_by_task(project_dir: Path) -> dict[str, dict[str, Any]]:
+    qa_path = project_dir / "qa-summary.json"
+    if not qa_path.exists():
+        return {}
+
+    payload = read_json(qa_path)
+    tasks = payload.get("tasks") if isinstance(payload, dict) else []
+    return {
+        str(task.get("task_id") or ""): task
+        for task in tasks
+        if isinstance(task, dict) and task.get("task_id")
+    }
+
+
 def group_comments_by_task(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
@@ -106,11 +120,17 @@ def first_actual_url(task: dict[str, Any], rows: list[dict[str, Any]]) -> str:
     return str(task.get("source_url") or "")
 
 
-def build_summary_rows(tasks: list[dict[str, Any]], comments_by_task: dict[str, list[dict[str, Any]]]) -> list[list[Any]]:
+def build_summary_rows(
+    tasks: list[dict[str, Any]],
+    comments_by_task: dict[str, list[dict[str, Any]]],
+    qa_by_task: dict[str, dict[str, Any]] | None = None,
+) -> list[list[Any]]:
+    qa_by_task = qa_by_task or {}
     rows = []
     for task in tasks:
         task_id = str(task.get("task_id") or "")
         comments = comments_by_task.get(task_id, [])
+        qa = qa_by_task.get(task_id, {})
         rows.append([
             task.get("phase", ""),
             task.get("source_excel_row", ""),
@@ -123,8 +143,8 @@ def build_summary_rows(tasks: list[dict[str, Any]], comments_by_task: dict[str, 
             len(comments),
             count_rows(comments, "level1"),
             count_rows(comments, "level2"),
-            task_status(task, comments),
-            "",
+            qa.get("status") or task_status(task, comments),
+            qa.get("notes", ""),
         ])
     return rows
 
@@ -234,6 +254,7 @@ def build_delivery_workbook(project_dir: str | Path, out: str | Path, template: 
     tasks = read_tasks(root)
     comments = read_jsonl(root / "all-normalized-comments.jsonl")
     comments_by_task = group_comments_by_task(comments)
+    qa_by_task = read_qa_by_task(root)
 
     workbook = Workbook()
     default_sheet = workbook.active
@@ -241,7 +262,7 @@ def build_delivery_workbook(project_dir: str | Path, out: str | Path, template: 
     phase_sheet = workbook.create_sheet("阶段汇总")
     detail_sheet = workbook.create_sheet("评论明细")
 
-    summary_rows = build_summary_rows(tasks, comments_by_task)
+    summary_rows = build_summary_rows(tasks, comments_by_task, qa_by_task)
     phase_rows = build_phase_rows(tasks, comments_by_task)
     detail_rows = build_detail_rows(tasks, comments_by_task)
 

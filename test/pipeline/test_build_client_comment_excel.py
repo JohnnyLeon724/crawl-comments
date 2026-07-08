@@ -119,6 +119,52 @@ class BuildClientCommentExcelTest(unittest.TestCase):
             self.assertEqual(detail_sheet["P3"].value, "用户A")
             workbook.close()
 
+    def test_uses_qa_summary_for_status_and_notes(self):
+        from build_client_comment_excel import build_delivery_workbook
+
+        with TemporaryDirectory() as tmp:
+            project_dir = Path(tmp)
+            out = project_dir / "delivery.xlsx"
+            self.write_json(project_dir / "crawl-tasks.json", {
+                "schema_version": "crawl-tasks-v1",
+                "tasks": [
+                    {
+                        "task_id": "task_0001",
+                        "phase": "KOL link-0630",
+                        "source_excel_row": 2,
+                        "source_index": "1",
+                        "platform": "douyin",
+                        "creator_name": "DJ初仔大朋友",
+                        "published_at_text": "6.15",
+                        "source_url": "https://v.douyin.com/abc/",
+                        "engagement_count": 134000,
+                        "expected_comment_count": 10,
+                    }
+                ],
+            })
+            self.write_jsonl(project_dir / "all-normalized-comments.jsonl", [])
+            self.write_json(project_dir / "qa-summary.json", {
+                "tasks": [
+                    {
+                        "task_id": "task_0001",
+                        "status": "failed",
+                        "notes": "未采集到评论；请复查登录态或 DOM snapshot",
+                        "actual_comment_count": 0,
+                        "level1_count": 0,
+                        "level2_count": 0,
+                    }
+                ]
+            })
+
+            build_delivery_workbook(project_dir, out)
+
+            workbook = load_workbook(out)
+            summary_sheet = workbook["汇总"]
+
+            self.assertEqual(summary_sheet["L2"].value, "failed")
+            self.assertEqual(summary_sheet["M2"].value, "未采集到评论；请复查登录态或 DOM snapshot")
+            workbook.close()
+
 
 if __name__ == "__main__":
     unittest.main()
