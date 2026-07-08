@@ -467,6 +467,78 @@ test('stage 7 enforces project output paths and supported platform hosts', () =>
   );
 });
 
+test('stage 10 captures current page comment DOM snapshot through the MCP tool', async () => {
+  const tools = require(toolsPath);
+  const listed = tools.listTools();
+  assert.ok(listed.find(tool => tool.name === 'capture_current_comment_dom_snapshot'));
+
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const outDir = path.join(projectRoot, 'output', 'run_snapshot_001');
+  const snapshot = {
+    schema_version: 'comment-dom-snapshot-v1',
+    platform: 'douyin',
+    source_url: 'https://www.douyin.com/video/123',
+    captured_at: '2026-07-08T04:00:00.000Z',
+    limits: {
+      maxChunks: 2,
+      maxCharsPerChunk: 1000
+    },
+    truncated: false,
+    chunks: [
+      {
+        chunk_id: 'chunk_0001',
+        dom_path: 'HTML:nth-of-type(1)>BODY:nth-of-type(1)>DIV:nth-of-type(1)',
+        role_hint: 'comment_candidate',
+        inner_text: '用户A评论内容3月前江苏2',
+        html: '<div>用户A评论内容3月前江苏2</div>',
+        nearby_buttons: ['回复'],
+        captured_at: '2026-07-08T04:00:00.000Z'
+      }
+    ]
+  };
+  const calls = [];
+
+  const result = await tools.callTool('capture_current_comment_dom_snapshot', {
+    outDir,
+    runId: 'run_snapshot_001',
+    maxChunks: 2,
+    maxCharsPerChunk: 1000
+  }, {
+    connectToCdp: async options => {
+      calls.push(['connect', options.timeoutMs]);
+      return {
+        page: {
+          url: () => 'https://www.douyin.com/video/123'
+        },
+        close: async () => calls.push(['close'])
+      };
+    },
+    captureCommentDomSnapshot: async (_page, options) => {
+      calls.push(['capture', options.maxChunks, options.maxCharsPerChunk]);
+      return snapshot;
+    },
+    projectRoot
+  });
+
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.status, 'success');
+  assert.equal(result.structuredContent.runId, 'run_snapshot_001');
+  assert.equal(result.structuredContent.outDir, outDir);
+  assert.equal(result.structuredContent.platform, 'douyin');
+  assert.equal(result.structuredContent.url, 'https://www.douyin.com/video/123');
+  assert.equal(result.structuredContent.chunkCount, 1);
+
+  const snapshotFile = path.join(outDir, 'comment-dom-snapshot.json');
+  assert.equal(result.structuredContent.snapshotFile, snapshotFile);
+  assert.equal(fs.existsSync(snapshotFile), true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(snapshotFile, 'utf8')), snapshot);
+  assert.deepEqual(calls, [
+    ['connect', 30000],
+    ['capture', 2, 1000],
+    ['close']
+  ]);
+});
+
 test('stage 9 rejects unsupported page hosts before injecting expander', async () => {
   const tools = require(toolsPath);
   const calls = [];

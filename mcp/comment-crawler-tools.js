@@ -6,6 +6,7 @@ const path = require('node:path');
 const runner = require('../script/crawl-comments-playwright.js');
 const normalizer = require('../script/normalize-comments.js');
 const cdp = require('./comment-crawler-cdp.js');
+const domSnapshot = require('./comment-crawler-dom-snapshot.js');
 const output = require('./comment-crawler-output.js');
 const security = require('./comment-crawler-security.js');
 
@@ -14,6 +15,7 @@ const STATUS_TOOL_NAME = 'get_comment_crawler_status';
 const EXPAND_TOOL_NAME = 'expand_current_page_comments';
 const SAVE_TOOL_NAME = 'save_current_page_comments';
 const NORMALIZE_TOOL_NAME = 'normalize_comment_run';
+const CAPTURE_DOM_TOOL_NAME = 'capture_current_comment_dom_snapshot';
 const DEFAULT_EXPAND_TIMEOUT_MS = 10 * 60 * 1000;
 
 function resolveProjectRoot(options = {}) {
@@ -171,6 +173,67 @@ function listTools() {
           rowCount: { type: 'number' }
         },
         required: ['status', 'platform', 'input', 'out', 'rowCount']
+      }
+    },
+    {
+      name: CAPTURE_DOM_TOOL_NAME,
+      title: 'Capture Current Comment DOM Snapshot',
+      description: 'Connect to Chrome CDP, capture bounded comment-area DOM chunks, and save a comment-dom-snapshot.json file for AI extraction.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          cdpEndpoint: {
+            type: 'string',
+            description: 'Chrome DevTools Protocol endpoint. Defaults to http://127.0.0.1:9222.'
+          },
+          connectTimeoutMs: {
+            type: 'number',
+            description: 'Timeout for connecting to Chrome CDP.'
+          },
+          outDir: {
+            type: 'string',
+            description: 'Output run directory. Defaults to output/<run_id>.'
+          },
+          runId: {
+            type: 'string',
+            description: 'Optional run id for deterministic output.'
+          },
+          maxChunks: {
+            type: 'number',
+            description: 'Maximum DOM chunks to return.'
+          },
+          maxCharsPerChunk: {
+            type: 'number',
+            description: 'Maximum text/html characters per chunk.'
+          },
+          includeHtml: {
+            type: 'boolean',
+            description: 'Whether to include sanitized local HTML in chunks.'
+          },
+          includeText: {
+            type: 'boolean',
+            description: 'Whether to include visible text in chunks.'
+          }
+        },
+        additionalProperties: false
+      },
+      outputSchema: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+          runId: { type: 'string' },
+          outDir: { type: 'string' },
+          snapshotFile: { type: 'string' },
+          platform: { type: 'string' },
+          url: { type: 'string' },
+          chunkCount: { type: 'number' },
+          truncated: { type: 'boolean' },
+          chunks: {
+            type: 'array',
+            items: { type: 'object' }
+          }
+        },
+        required: ['status', 'runId', 'outDir', 'snapshotFile', 'platform', 'url', 'chunkCount', 'truncated', 'chunks']
       }
     }
   ];
@@ -337,6 +400,59 @@ function normalizeCommentRun(args = {}, context = {}) {
   });
 }
 
+async function captureCurrentCommentDomSnapshot(args = {}, context = {}) {
+  const projectRoot = resolveProjectRoot(context);
+  const connectToCdp = context.connectToCdp || cdp.connectToCdp;
+  const session = await connectToCdp({
+    cdpEndpoint: args.cdpEndpoint,
+    timeoutMs: Number.isFinite(Number(args.connectTimeoutMs))
+      ? Number(args.connectTimeoutMs)
+      : cdp.DEFAULT_CDP_TIMEOUT_MS,
+    playwright: context.playwright
+  });
+
+  try {
+    const page = session.page;
+    const sourceUrl = getPageUrl(page);
+    security.assertAllowedPageUrl(sourceUrl, context.allowedHosts);
+
+    const runId = args.runId || runner.createRunId();
+    const outDir = security.resolveOutputPath(
+      projectRoot,
+      args.outDir || path.join('output', runId)
+    );
+    const captureSnapshot = context.captureCommentDomSnapshot || domSnapshot.captureCommentDomSnapshot;
+    const snapshot = await captureSnapshot(page, {
+      platform: detectPlatformSafe(sourceUrl),
+      sourceUrl,
+      maxChunks: args.maxChunks,
+      maxCharsPerChunk: args.maxCharsPerChunk,
+      includeHtml: args.includeHtml,
+      includeText: args.includeText
+    });
+    const snapshotFile = path.join(outDir, 'comment-dom-snapshot.json');
+
+    fs.mkdirSync(outDir, { recursive: true });
+    output.writeJson(snapshotFile, snapshot);
+
+    return {
+      status: 'success',
+      runId,
+      outDir,
+      snapshotFile,
+      platform: snapshot.platform || detectPlatformSafe(sourceUrl),
+      url: snapshot.source_url || sourceUrl,
+      chunkCount: Array.isArray(snapshot.chunks) ? snapshot.chunks.length : 0,
+      truncated: Boolean(snapshot.truncated),
+      chunks: Array.isArray(snapshot.chunks) ? snapshot.chunks : []
+    };
+  } finally {
+    if (session && typeof session.close === 'function') {
+      await session.close();
+    }
+  }
+}
+
 async function callTool(name, args = {}, context = {}) {
   if (name === STATUS_TOOL_NAME) {
     return buildToolResult(getCommentCrawlerStatus({
@@ -356,6 +472,10 @@ async function callTool(name, args = {}, context = {}) {
     return buildToolResult(normalizeCommentRun(args, context));
   }
 
+  if (name === CAPTURE_DOM_TOOL_NAME) {
+    return buildToolResult(await captureCurrentCommentDomSnapshot(args, context));
+  }
+
   throw new Error(`Unknown tool: ${name}`);
 }
 
@@ -365,6 +485,7 @@ module.exports = {
   EXPAND_TOOL_NAME,
   SAVE_TOOL_NAME,
   NORMALIZE_TOOL_NAME,
+  CAPTURE_DOM_TOOL_NAME,
   DEFAULT_EXPAND_TIMEOUT_MS,
   getCommentCrawlerStatus,
   listTools,
@@ -375,5 +496,6 @@ module.exports = {
   readCurrentPagePayload,
   saveCurrentPageComments,
   normalizeCommentRun,
+  captureCurrentCommentDomSnapshot,
   callTool
 };

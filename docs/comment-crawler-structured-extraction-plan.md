@@ -291,7 +291,7 @@ script/normalize-ai-comment-extraction.js
 | 1 | 已完成 | 调整计划与数据边界 | 高 | 低 | 本文档 | 明确 MCP 只返回 DOM snapshot，AI 负责结构化 |
 | 2 | 已完成 | 定义 DOM snapshot schema | 很高 | 低 | `schemas/comment-dom-snapshot.schema.json` | chunks 字段、大小限制、source 信息明确 |
 | 3 | 已完成 | 定义 AI 输出 schema | 很高 | 低 | `schemas/ai-comment-extraction.schema.json` | AI 输出 rows/rejected/source_chunk_id 可校验 |
-| 4 | 待开始 | 实现 `capture_current_comment_dom_snapshot` | 很高 | 中 | MCP tool | 当前页面可返回并保存 bounded DOM chunks |
+| 4 | 已完成 | 实现 `capture_current_comment_dom_snapshot` | 很高 | 中 | MCP tool | 当前页面可返回并保存 bounded DOM chunks |
 | 5 | 待开始 | DOM 裁剪和噪声压缩 | 很高 | 中 | snapshot extractor | 不返回整页 DOM，去除 script/style/svg，限制 chunk 大小 |
 | 6 | 待开始 | AI 结构化 prompt 模板 | 高 | 低 | `prompts/comment-dom-extraction.md` | 能指导 AI 从 chunks 输出 schema JSON |
 | 7 | 待开始 | AI 输出归一化脚本 | 高 | 中 | `normalize-ai-comment-extraction.js` | AI JSON 可转现有 `normalized-comments.jsonl` |
