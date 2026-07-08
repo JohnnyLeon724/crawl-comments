@@ -226,8 +226,56 @@ function buildEvaluationExpression(pageFunction, arg) {
 
 function createRawCdpPage(client, target) {
   const currentUrl = String(target.url || '');
+  let mouseX = 0;
+  let mouseY = 0;
   const page = {
     url: () => currentUrl
+  };
+
+  page.mouse = {
+    move: async (x, y, options = {}) => {
+      const targetX = Number(x);
+      const targetY = Number(y);
+      const steps = Number.isInteger(Number(options.steps)) && Number(options.steps) > 0
+        ? Number(options.steps)
+        : 1;
+      const startX = mouseX;
+      const startY = mouseY;
+
+      for (let step = 1; step <= steps; step += 1) {
+        const nextX = startX + ((targetX - startX) * step) / steps;
+        const nextY = startY + ((targetY - startY) * step) / steps;
+        await client.send('Input.dispatchMouseEvent', {
+          type: 'mouseMoved',
+          x: nextX,
+          y: nextY,
+          button: 'none'
+        });
+      }
+
+      mouseX = targetX;
+      mouseY = targetY;
+    },
+    down: async (options = {}) => {
+      await client.send('Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        x: mouseX,
+        y: mouseY,
+        button: options.button || 'left',
+        buttons: 1,
+        clickCount: 1
+      });
+    },
+    up: async (options = {}) => {
+      await client.send('Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        x: mouseX,
+        y: mouseY,
+        button: options.button || 'left',
+        buttons: 0,
+        clickCount: 1
+      });
+    }
   };
 
   page.evaluate = async (pageFunction, arg) => {
@@ -353,6 +401,7 @@ module.exports = {
   listRawCdpTargets,
   selectRawCdpTarget,
   RawCdpClient,
+  createRawCdpPage,
   rawCdpConnect,
   connectToCdp
 };

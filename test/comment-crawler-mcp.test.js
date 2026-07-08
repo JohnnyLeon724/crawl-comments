@@ -195,6 +195,40 @@ test('stage 3 falls back to raw CDP when Playwright cannot manage browser contex
   ]);
 });
 
+test('raw CDP page exposes Playwright-like mouse methods backed by Input.dispatchMouseEvent', async () => {
+  const cdp = require(cdpPath);
+  const calls = [];
+  const client = {
+    send: async (method, params) => {
+      calls.push([method, params]);
+      if (method === 'Runtime.evaluate') return { result: { value: 'ok' } };
+      return {};
+    },
+    close: async () => {}
+  };
+  const page = cdp.createRawCdpPage(client, {
+    url: 'https://www.douyin.com/video/123'
+  });
+
+  await page.mouse.move(100, 200, { steps: 3 });
+  await page.mouse.down();
+  await page.mouse.up();
+
+  assert.equal(calls.filter(call => call[0] === 'Input.dispatchMouseEvent').length, 5);
+  assert.deepEqual(calls[0], [
+    'Input.dispatchMouseEvent',
+    { type: 'mouseMoved', x: 33.333333333333336, y: 66.66666666666667, button: 'none' }
+  ]);
+  assert.deepEqual(calls[3], [
+    'Input.dispatchMouseEvent',
+    { type: 'mousePressed', x: 100, y: 200, button: 'left', buttons: 1, clickCount: 1 }
+  ]);
+  assert.deepEqual(calls[4], [
+    'Input.dispatchMouseEvent',
+    { type: 'mouseReleased', x: 100, y: 200, button: 'left', buttons: 0, clickCount: 1 }
+  ]);
+});
+
 test('stage 3 selects the latest HTTP page and reads a page snapshot', async () => {
   assert.equal(fs.existsSync(cdpPath), true);
 
