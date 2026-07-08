@@ -23,9 +23,9 @@ test('stage 2 exposes a comment crawler status tool', async () => {
   });
 
   const listed = tools.listTools();
-  assert.equal(listed.length, 1);
-  assert.equal(listed[0].name, 'get_comment_crawler_status');
-  assert.equal(listed[0].inputSchema.type, 'object');
+  const statusTool = listed.find(tool => tool.name === 'get_comment_crawler_status');
+  assert.ok(statusTool);
+  assert.equal(statusTool.inputSchema.type, 'object');
 
   const result = await tools.callTool('get_comment_crawler_status', {}, { projectRoot });
   assert.equal(result.isError, false);
@@ -183,4 +183,115 @@ test('stage 3 selects the latest HTTP page and reads a page snapshot', async () 
     title: '标题',
     text: '正文'
   });
+});
+
+test('stage 4 expands comments on the current CDP page and returns a summary', async () => {
+  const tools = require(toolsPath);
+  const listed = tools.listTools();
+  assert.ok(listed.find(tool => tool.name === 'expand_current_page_comments'));
+
+  const calls = [];
+  const payload = {
+    state: {
+      stopReason: 'idle',
+      totalClicks: 5,
+      round: 8,
+      totalErrors: 0
+    },
+    results: [
+      { text: '第一条评论' },
+      { text: '第二条评论' }
+    ]
+  };
+  const page = {
+    url: () => 'https://www.douyin.com/video/123',
+    evaluate: async value => {
+      if (typeof value === 'string') {
+        calls.push(['inject', value]);
+        return undefined;
+      }
+
+      calls.push(['payload']);
+      return payload;
+    },
+    waitForFunction: async (_predicate, _arg, options) => {
+      calls.push(['waitForStop', options.timeout]);
+    }
+  };
+  const session = {
+    page,
+    close: async () => calls.push(['close'])
+  };
+
+  const result = await tools.callTool('expand_current_page_comments', {
+    timeoutMs: 4321
+  }, {
+    connectToCdp: async options => {
+      calls.push(['connect', options.timeoutMs]);
+      return session;
+    },
+    expanderScript: '/* expander script */',
+    projectRoot: '/tmp/comment-crawler-demo'
+  });
+
+  assert.equal(result.isError, false);
+  assert.deepEqual(result.structuredContent, {
+    status: 'success',
+    platform: 'douyin',
+    url: 'https://www.douyin.com/video/123',
+    stopReason: 'idle',
+    rawCommentCount: 2,
+    totalClicks: 5,
+    rounds: 8,
+    totalErrors: 0
+  });
+  assert.deepEqual(calls, [
+    ['connect', 30000],
+    ['inject', '/* expander script */'],
+    ['waitForStop', 4321],
+    ['payload'],
+    ['close']
+  ]);
+});
+
+test('stage 4 exposes expand_current_page_comments through JSON-RPC tools/call', async () => {
+  const server = require(serverPath);
+  const response = await server.handleJsonRpcMessage({
+    jsonrpc: '2.0',
+    id: 5,
+    method: 'tools/call',
+    params: {
+      name: 'expand_current_page_comments',
+      arguments: {
+        timeoutMs: 1000
+      }
+    }
+  }, {
+    connectToCdp: async () => ({
+      page: {
+        url: () => 'https://www.xiaohongshu.com/explore/abc',
+        evaluate: async value => {
+          if (typeof value === 'string') return undefined;
+          return {
+            state: {
+              stopReason: 'idle',
+              totalClicks: 1,
+              round: 2,
+              totalErrors: 0
+            },
+            results: [{ text: '评论' }]
+          };
+        },
+        waitForFunction: async () => {}
+      },
+      close: async () => {}
+    }),
+    expanderScript: '/* expander script */',
+    projectRoot: '/tmp/comment-crawler-demo'
+  });
+
+  assert.equal(response.id, 5);
+  assert.equal(response.result.isError, false);
+  assert.equal(response.result.structuredContent.platform, 'xiaohongshu');
+  assert.equal(response.result.structuredContent.rawCommentCount, 1);
 });

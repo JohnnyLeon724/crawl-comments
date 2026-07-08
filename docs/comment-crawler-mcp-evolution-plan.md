@@ -99,7 +99,7 @@ Chrome 插件不是第一版目标。
 | 1 | 已完成 | 保留归一化、AI、Excel 后处理 | 很高 | 已投入 | `normalize-comments.js`、AI scripts、Excel script | raw 能转 normalized，AI 和 Excel 可复用 |
 | 2 | 已完成 | MCP 最小可行性验证 | 很高 | 低 | `mcp/comment-crawler-server.js` | Codex 能发现并调用一个本地 MCP tool |
 | 3 | 已完成 | 抽出 CDP 页面控制模块 | 很高 | 中 | `mcp/comment-crawler-cdp.js` | 能连接 `http://127.0.0.1:9222` 并定位当前 tab |
-| 4 | 待开始 | 实现 `expand_current_page_comments` | 很高 | 中 | MCP tool | 当前 Chrome 页面可注入 expander 并返回评论数、stop reason |
+| 4 | 已完成 | 实现 `expand_current_page_comments` | 很高 | 中 | MCP tool | 当前 Chrome 页面可注入 expander 并返回评论数、stop reason |
 | 5 | 待开始 | 实现 `save_current_page_comments` | 高 | 低 | MCP tool、`output/<run_id>/` | 当前页面 payload 可保存 raw JSON/CSV/manifest |
 | 6 | 待开始 | 实现 `normalize_comment_run` | 高 | 低 | MCP tool | 给定 run dir 和 platform，输出 `normalized-comments.jsonl` |
 | 7 | 待开始 | 补 MCP 安全边界与配置 | 高 | 低 | 配置、域名限制、输出限制 | 只写入项目 `output/`，不读取 Cookie，不并发执行 |
