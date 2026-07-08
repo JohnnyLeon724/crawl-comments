@@ -2,12 +2,14 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
 const toolsPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-tools.js');
 const serverPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-server.js');
 const cdpPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-cdp.js');
+const outputPath = path.join(__dirname, '..', 'mcp', 'comment-crawler-output.js');
 
 test('stage 2 exposes a comment crawler status tool', async () => {
   assert.equal(fs.existsSync(toolsPath), true);
@@ -294,4 +296,97 @@ test('stage 4 exposes expand_current_page_comments through JSON-RPC tools/call',
   assert.equal(response.result.isError, false);
   assert.equal(response.result.structuredContent.platform, 'xiaohongshu');
   assert.equal(response.result.structuredContent.rawCommentCount, 1);
+});
+
+test('stage 5 saves the current page comment payload to CLI-compatible output files', async () => {
+  assert.equal(fs.existsSync(outputPath), true);
+
+  const tools = require(toolsPath);
+  const outDir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-run-')), 'run_001');
+  const calls = [];
+  const payload = {
+    state: {
+      stopReason: 'idle',
+      totalComments: 2,
+      totalClicks: 3,
+      round: 4,
+      totalErrors: 0
+    },
+    config: {
+      maxIdleRounds: 8
+    },
+    results: [
+      {
+        row_type: 'level1',
+        text: '第一条评论',
+        dom_path: 'DIV:nth-of-type(1)',
+        captured_at: '2026-07-08T00:00:00.000Z'
+      },
+      {
+        row_type: 'level1',
+        text: '第二条评论',
+        dom_path: 'DIV:nth-of-type(2)',
+        captured_at: '2026-07-08T00:00:01.000Z'
+      }
+    ]
+  };
+  const page = {
+    url: () => 'https://www.douyin.com/video/123',
+    evaluate: async () => {
+      calls.push(['payload']);
+      return payload;
+    },
+    screenshot: async options => {
+      calls.push(['screenshot', path.basename(options.path)]);
+      fs.writeFileSync(options.path, 'PNG');
+    }
+  };
+
+  const result = await tools.callTool('save_current_page_comments', {
+    outDir,
+    runId: 'run_test_001'
+  }, {
+    connectToCdp: async options => {
+      calls.push(['connect', options.timeoutMs]);
+      return {
+        page,
+        close: async () => calls.push(['close'])
+      };
+    },
+    projectRoot: '/tmp/comment-crawler-demo'
+  });
+
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.status, 'success');
+  assert.equal(result.structuredContent.runId, 'run_test_001');
+  assert.equal(result.structuredContent.rawCommentCount, 2);
+  assert.equal(result.structuredContent.outDir, outDir);
+
+  const rawPath = path.join(outDir, 'raw-comments.json');
+  const csvPath = path.join(outDir, 'raw-comments.csv');
+  const manifestPath = path.join(outDir, 'manifest.json');
+  const screenshotPath = path.join(outDir, 'final-page.png');
+
+  assert.equal(fs.existsSync(rawPath), true);
+  assert.equal(fs.existsSync(csvPath), true);
+  assert.equal(fs.existsSync(manifestPath), true);
+  assert.equal(fs.existsSync(screenshotPath), true);
+
+  const raw = JSON.parse(fs.readFileSync(rawPath, 'utf8'));
+  assert.equal(raw.source_url, 'https://www.douyin.com/video/123');
+  assert.equal(raw.results.length, 2);
+  assert.equal(fs.readFileSync(csvPath, 'utf8').charCodeAt(0), 0xfeff);
+
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  assert.equal(manifest.run_id, 'run_test_001');
+  assert.equal(manifest.platform, 'douyin');
+  assert.equal(manifest.status, 'success');
+  assert.equal(manifest.raw_comment_count, 2);
+
+  assert.deepEqual(calls, [
+    ['connect', 30000],
+    ['payload'],
+    ['screenshot', 'final-page.png'],
+    ['close']
+  ]);
 });
