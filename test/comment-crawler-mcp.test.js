@@ -479,6 +479,101 @@ test('findVisibleExpandTargets returns innermost visible expand controls with bo
   assert.ok(targets[0].click_point.y <= 50);
 });
 
+test('clickExpandTargets uses page.mouse with configured movement and hold timing', async () => {
+  const tools = require(toolsPath);
+  const calls = [];
+  const page = {
+    mouse: {
+      move: async (x, y, options) => calls.push(['move', x, y, options.steps]),
+      down: async () => calls.push(['down']),
+      up: async () => calls.push(['up'])
+    }
+  };
+  const sleeps = [];
+
+  const result = await tools.clickExpandTargets(page, [
+    { text: '展开5条回复', click_point: { x: 100, y: 200 } },
+    { text: '展开1条回复', click_point: { x: 120, y: 260 } }
+  ], {
+    click: tools.normalizeClickProfile({
+      mouseMoveStepsMin: 4,
+      mouseMoveStepsMax: 4,
+      clickDownMsMin: 60,
+      clickDownMsMax: 60,
+      clickGapMsMin: 300,
+      clickGapMsMax: 300
+    }),
+    sleep: async ms => sleeps.push(ms),
+    random: () => 0
+  });
+
+  assert.equal(result.clicked, 2);
+  assert.equal(result.errors, 0);
+  assert.equal(result.click_mode, 'coordinate');
+  assert.equal(result.coordinate_click_count, 2);
+  assert.deepEqual(calls, [
+    ['move', 100, 200, 4],
+    ['down'],
+    ['up'],
+    ['move', 120, 260, 4],
+    ['down'],
+    ['up']
+  ]);
+  assert.deepEqual(sleeps, [60, 300, 60, 300]);
+});
+
+test('expandVisibleCommentsOnce falls back to DOM click when coordinate input is unavailable', async () => {
+  const tools = require(toolsPath);
+  const calls = [];
+  const page = {
+    evaluate: async () => ({ clicked: 1, errors: 0, available: 1 })
+  };
+
+  const result = await tools.expandVisibleCommentsOnce(page, {
+    maxClicksPerRound: 3,
+    click: tools.normalizeClickProfile({
+      clickMode: 'coordinate',
+      fallbackClickMode: 'dom-click'
+    }),
+    findVisibleExpandTargets: async () => [
+      { text: '展开1条回复', click_point: { x: 10, y: 20 } }
+    ],
+    clickExpandTargets: async () => {
+      calls.push('coordinate');
+      return {
+        clicked: 0,
+        errors: 1,
+        available: 1,
+        click_mode: 'coordinate',
+        fallback_used: false,
+        coordinate_click_count: 0,
+        dom_click_count: 0,
+        fallback_click_count: 0,
+        last_click_errors: ['page.mouse unavailable']
+      };
+    },
+    domClickExpandTargets: async () => {
+      calls.push('dom');
+      return {
+        clicked: 1,
+        errors: 0,
+        available: 1,
+        click_mode: 'dom-click',
+        fallback_used: true,
+        coordinate_click_count: 0,
+        dom_click_count: 1,
+        fallback_click_count: 1,
+        last_click_errors: []
+      };
+    }
+  });
+
+  assert.deepEqual(calls, ['coordinate', 'dom']);
+  assert.equal(result.clicked, 1);
+  assert.equal(result.fallback_used, true);
+  assert.equal(result.fallback_click_count, 1);
+});
+
 test('stage 5 saves the current page comment payload to CLI-compatible output files', async () => {
   assert.equal(fs.existsSync(outputPath), true);
 

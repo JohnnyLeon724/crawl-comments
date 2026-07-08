@@ -969,10 +969,60 @@ async function findVisibleExpandTargets(page, options = {}) {
   });
 }
 
-async function expandVisibleCommentsOnce(page, options = {}) {
-  const maxClicksPerRound = toPositiveInteger(options.maxClicksPerRound, DEFAULT_EXPAND_CAPTURE_CONFIG.maxClicksPerRound);
+function emptyClickSummary(mode, available = 0) {
+  return {
+    clicked: 0,
+    errors: 0,
+    available,
+    click_mode: mode,
+    fallback_used: false,
+    coordinate_click_count: 0,
+    dom_click_count: 0,
+    fallback_click_count: 0,
+    last_click_errors: []
+  };
+}
 
-  return page.evaluate(config => {
+async function clickExpandTargets(page, targets = [], options = {}) {
+  const click = options.click || normalizeClickProfile(options);
+  const random = typeof options.random === 'function' ? options.random : Math.random;
+  const wait = options.sleep || sleep;
+  const summary = emptyClickSummary('coordinate', targets.length);
+
+  if (!page || !page.mouse || typeof page.mouse.move !== 'function') {
+    summary.errors = targets.length ? 1 : 0;
+    summary.last_click_errors.push('page.mouse unavailable');
+    return summary;
+  }
+
+  for (const target of targets) {
+    try {
+      const point = target.click_point || target.center;
+      if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) {
+        throw new Error('target click point unavailable');
+      }
+      const steps = pickRangeValue(click.mouseMoveSteps, random);
+      await page.mouse.move(Number(point.x), Number(point.y), { steps });
+      await page.mouse.down();
+      await wait(pickRangeValue(click.clickDownMs, random));
+      await page.mouse.up();
+      await wait(pickRangeValue(click.clickGapMs, random));
+      summary.clicked += 1;
+      summary.coordinate_click_count += 1;
+    } catch (error) {
+      summary.errors += 1;
+      if (summary.last_click_errors.length < 5) {
+        summary.last_click_errors.push(error && error.message ? error.message : String(error));
+      }
+    }
+  }
+
+  return summary;
+}
+
+async function domClickExpandTargets(page, _targets = [], options = {}) {
+  const maxClicksPerRound = toPositiveInteger(options.maxClicksPerRound, DEFAULT_EXPAND_CAPTURE_CONFIG.maxClicksPerRound);
+  const result = await page.evaluate(config => {
     const normalizeText = value => String(value == null ? '' : value).replace(/\s+/g, '').trim();
     const patterns = [
       /^展开更多(?:回复|评论)?$/,
@@ -1055,6 +1105,56 @@ async function expandVisibleCommentsOnce(page, options = {}) {
   }, {
     maxClicksPerRound
   });
+
+  const clicked = Number(result && result.clicked) || 0;
+  const errors = Number(result && result.errors) || 0;
+
+  return {
+    clicked,
+    errors,
+    available: Number(result && result.available) || clicked,
+    click_mode: 'dom-click',
+    fallback_used: Boolean(options.fallbackUsed),
+    coordinate_click_count: 0,
+    dom_click_count: clicked,
+    fallback_click_count: options.fallbackUsed ? clicked : 0,
+    last_click_errors: []
+  };
+}
+
+async function expandVisibleCommentsOnce(page, options = {}) {
+  const maxClicksPerRound = toPositiveInteger(options.maxClicksPerRound, DEFAULT_EXPAND_CAPTURE_CONFIG.maxClicksPerRound);
+  const click = options.click || normalizeClickProfile(options);
+  const findTargets = options.findVisibleExpandTargets || findVisibleExpandTargets;
+  const coordinateClick = options.clickExpandTargets || clickExpandTargets;
+  const domClick = options.domClickExpandTargets || domClickExpandTargets;
+
+  if (click.clickMode === 'dom-click') {
+    return domClick(page, [], { ...options, maxClicksPerRound });
+  }
+
+  const targets = await findTargets(page, {
+    ...options,
+    maxClicksPerRound,
+    clickJitterPx: click.clickJitterPx
+  });
+  const coordinateResult = await coordinateClick(page, targets, { ...options, click });
+
+  if (coordinateResult.clicked > 0 || click.fallbackClickMode !== 'dom-click') {
+    return coordinateResult;
+  }
+
+  const fallbackResult = await domClick(page, targets, {
+    ...options,
+    maxClicksPerRound,
+    fallbackUsed: true
+  });
+
+  return {
+    ...fallbackResult,
+    errors: coordinateResult.errors + fallbackResult.errors,
+    last_click_errors: coordinateResult.last_click_errors.concat(fallbackResult.last_click_errors).slice(0, 5)
+  };
 }
 
 async function scrollCommentContainer(page, options = {}) {
@@ -1793,6 +1893,9 @@ module.exports = {
   normalizeExpandCaptureConfig,
   buildExpandTargetScript,
   findVisibleExpandTargets,
+  emptyClickSummary,
+  clickExpandTargets,
+  domClickExpandTargets,
   expandVisibleCommentsOnce,
   scrollCommentContainer,
   decorateCaptureState,
