@@ -85,6 +85,27 @@ class ResumeCommentProjectTest(unittest.TestCase):
             self.assertEqual(plan["tasks"][0]["action"], "run")
             self.assertEqual(plan["tasks"][0]["suggested_out_dir"], "runs/task_0001")
 
+    def test_treats_existing_batches_as_partial_work_outputs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            self.write_json(project_dir / "crawl-tasks.json", {
+                "tasks": [
+                    {"task_id": "task_0001", "platform": "douyin"},
+                ]
+            })
+            batch_file = project_dir / "runs" / "task_0001" / "batches" / "batch_0001" / "comment-dom-batch.json"
+            self.write_json(batch_file, {
+                "schema_version": "comment-dom-batch-v1",
+                "batch_id": "batch_0001",
+            })
+
+            plan = build_resume_plan(project_dir, resume_id="resume_test")
+            task = plan["tasks"][0]
+
+            self.assertEqual(task["status"], "partial")
+            self.assertEqual(task["action"], "rerun")
+            self.assertIn("batches/", task["existing_files"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -90,6 +90,84 @@ class QaCommentDeliveryTest(unittest.TestCase):
             saved = json.loads((project_dir / "qa-summary.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["tasks"][0]["task_id"], "task_0001")
 
+    def test_includes_batch_level_metrics_when_batches_exist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            (project_dir / "crawl-tasks.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "task_id": "task_0001",
+                                "phase": "KOL",
+                                "platform": "douyin",
+                                "expected_comment_count": 1,
+                            },
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (project_dir / "all-normalized-comments.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task_0001",
+                        "row_type": "level1",
+                        "user_name": "用户A",
+                        "text": "评论",
+                        "created_at": "3月前",
+                        "ip_location": "江苏",
+                        "raw": {
+                            "ai_row": {"source_chunk_id": "candidate_000001"},
+                            "source_batch_id": "batch_0001",
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            batch_root = project_dir / "runs" / "task_0001" / "batches"
+            (batch_root / "batch_0001").mkdir(parents=True)
+            (batch_root / "batch_0001" / "comment-dom-batch.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "comment-dom-batch-v1",
+                        "batch_id": "batch_0001",
+                        "state": {"new_candidate_count": 1, "has_more": True},
+                        "candidates": [{"candidate_id": "candidate_000001"}],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (batch_root / "batch_0001" / "ai-comment-extraction.json").write_text("{}\n", encoding="utf-8")
+            (batch_root / "batch_0002").mkdir(parents=True)
+            (batch_root / "batch_0002" / "comment-dom-batch.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "comment-dom-batch-v1",
+                        "batch_id": "batch_0002",
+                        "state": {"new_candidate_count": 0, "has_more": False},
+                        "candidates": [],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            summary = build_qa_summary(project_dir)
+            task = summary["tasks"][0]
+
+            self.assertEqual(task["batch_count"], 2)
+            self.assertEqual(task["empty_batch_count"], 1)
+            self.assertEqual(task["missing_ai_extraction_batch_count"], 1)
+            self.assertEqual(task["truncated_batch_count"], 1)
+            self.assertEqual(summary["total_batch_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

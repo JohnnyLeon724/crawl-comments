@@ -71,6 +71,36 @@ class MergeCommentRunsTest(unittest.TestCase):
 
             self.assertEqual(rows, [])
 
+    def test_project_merge_falls_back_to_task_batches_when_task_output_is_missing(self):
+        from merge_comment_runs import merge_project_comments, write_merged_comments
+
+        with TemporaryDirectory() as tmp:
+            project_dir = Path(tmp)
+            self.write_json(project_dir / "crawl-tasks.json", {
+                "schema_version": "crawl-tasks-v1",
+                "tasks": [
+                    {"task_id": "task_0001"},
+                    {"task_id": "task_0002"},
+                ],
+            })
+            self.write_jsonl(project_dir / "runs" / "task_0001" / "batches" / "batch_0002" / "normalized-comments.jsonl", [
+                {"row_key": "r2", "task_id": "task_0001", "text": "第二批"},
+            ])
+            self.write_jsonl(project_dir / "runs" / "task_0001" / "batches" / "batch_0001" / "normalized-comments.jsonl", [
+                {"row_key": "r1", "task_id": "task_0001", "text": "第一批"},
+            ])
+            self.write_jsonl(project_dir / "runs" / "task_0002" / "normalized-comments.jsonl", [
+                {"row_key": "r3", "task_id": "task_0002", "text": "任务级输出"},
+            ])
+
+            rows = merge_project_comments(project_dir)
+
+            self.assertEqual([row["row_key"] for row in rows], ["r1", "r2", "r3"])
+
+            summary = write_merged_comments(project_dir)
+            self.assertEqual(summary["row_count"], 3)
+            self.assertEqual(summary["batch_task_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

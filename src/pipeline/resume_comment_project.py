@@ -11,6 +11,7 @@ RUN_OUTPUT_FILES = [
     "ai-comment-extraction.json",
     "normalized-comments.jsonl",
     "qa.json",
+    "batches/",
 ]
 
 WORK_OUTPUT_FILES = set(RUN_OUTPUT_FILES) - {"task.json"}
@@ -43,7 +44,16 @@ def read_qa_by_task(project_dir: Path) -> dict[str, dict[str, Any]]:
 def existing_run_files(run_dir: Path) -> list[str]:
     if not run_dir.exists():
         return []
-    return [name for name in RUN_OUTPUT_FILES if (run_dir / name).exists()]
+
+    files: list[str] = []
+    for name in RUN_OUTPUT_FILES:
+        if name.endswith("/"):
+            if (run_dir / name.rstrip("/")).exists():
+                files.append(name)
+            continue
+        if (run_dir / name).exists():
+            files.append(name)
+    return files
 
 
 def has_work_outputs(files: list[str]) -> bool:

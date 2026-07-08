@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from merge_task_batches import iter_batch_dirs, merge_task_batch_comments
+
 
 DEFAULT_OUTPUT_NAME = "all-normalized-comments.jsonl"
 
@@ -48,8 +50,11 @@ def merge_project_comments(project_dir: str | Path) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
 
     for task_id in read_task_ids(root):
-        run_file = root / "runs" / task_id / "normalized-comments.jsonl"
-        for row in read_jsonl(run_file):
+        task_dir = root / "runs" / task_id
+        run_file = task_dir / "normalized-comments.jsonl"
+        task_rows = read_jsonl(run_file) if run_file.exists() else merge_task_batch_comments(task_dir)
+
+        for row in task_rows:
             row_key = str(row.get("row_key") or "")
             if not row_key or row_key in seen:
                 continue
@@ -57,6 +62,16 @@ def merge_project_comments(project_dir: str | Path) -> list[dict[str, Any]]:
             merged.append(row)
 
     return merged
+
+
+def count_batch_tasks(project_dir: str | Path) -> int:
+    root = Path(project_dir)
+    total = 0
+    for task_id in read_task_ids(root):
+        task_dir = root / "runs" / task_id
+        if iter_batch_dirs(task_dir):
+            total += 1
+    return total
 
 
 def build_summary(project_dir: Path, rows: list[dict[str, Any]], output_path: Path) -> dict[str, Any]:
@@ -67,6 +82,7 @@ def build_summary(project_dir: Path, rows: list[dict[str, Any]], output_path: Pa
         "generated_at": now,
         "project_dir": str(project_dir),
         "task_count": len(task_ids),
+        "batch_task_count": count_batch_tasks(project_dir),
         "row_count": len(rows),
         "out": str(output_path),
     }

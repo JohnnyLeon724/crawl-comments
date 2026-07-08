@@ -13,6 +13,12 @@ def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def read_json_if_exists(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    return read_json(path)
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
@@ -81,12 +87,64 @@ def build_notes(issues: list[str], metrics: dict[str, Any]) -> str:
         notes.append(f"{metrics['missing_time_or_location_count']} 条缺少时间或地区")
     if "missing_source_chunk" in issues:
         notes.append(f"{metrics['missing_source_chunk_count']} 条缺少 DOM chunk 证据")
+    if "missing_ai_extraction_batch" in issues:
+        notes.append(f"{metrics['missing_ai_extraction_batch_count']} 个 batch 缺少 AI 结构化输出")
+    if "truncated_batch" in issues:
+        notes.append(f"{metrics['truncated_batch_count']} 个 batch 达到候选上限")
     return "；".join(notes)
 
 
-def build_task_qa(task: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str, Any]:
+def read_task_batch_metrics(project_dir: Path, task_id: str) -> dict[str, int]:
+    batches_dir = project_dir / "runs" / task_id / "batches"
+    if not batches_dir.exists():
+        return {
+            "batch_count": 0,
+            "empty_batch_count": 0,
+            "missing_ai_extraction_batch_count": 0,
+            "truncated_batch_count": 0,
+        }
+
+    batch_dirs = sorted(path for path in batches_dir.iterdir() if path.is_dir())
+    empty_batch_count = 0
+    missing_ai_extraction_batch_count = 0
+    truncated_batch_count = 0
+
+    for batch_dir in batch_dirs:
+        batch = read_json_if_exists(batch_dir / "comment-dom-batch.json")
+        state = batch.get("state") if isinstance(batch.get("state"), dict) else {}
+        candidates = batch.get("candidates") if isinstance(batch.get("candidates"), list) else []
+        new_candidate_count = state.get("new_candidate_count")
+        if new_candidate_count is None:
+            new_candidate_count = len(candidates)
+
+        if int(new_candidate_count or 0) == 0:
+            empty_batch_count += 1
+        if not (batch_dir / "ai-comment-extraction.json").exists():
+            missing_ai_extraction_batch_count += 1
+        if state.get("has_more") or state.get("stop_reason") == "max_candidates":
+            truncated_batch_count += 1
+
+    return {
+        "batch_count": len(batch_dirs),
+        "empty_batch_count": empty_batch_count,
+        "missing_ai_extraction_batch_count": missing_ai_extraction_batch_count,
+        "truncated_batch_count": truncated_batch_count,
+    }
+
+
+def build_task_qa(
+    task: dict[str, Any],
+    rows: list[dict[str, Any]],
+    batch_metrics: dict[str, int] | None = None,
+) -> dict[str, Any]:
     expected = int(task.get("expected_comment_count") or 0)
     actual = len(rows)
+    batch_metrics = batch_metrics or {
+        "batch_count": 0,
+        "empty_batch_count": 0,
+        "missing_ai_extraction_batch_count": 0,
+        "truncated_batch_count": 0,
+    }
     empty_text_count = len([row for row in rows if not str(row.get("text") or "").strip()])
     missing_user_name_count = len([row for row in rows if not str(row.get("user_name") or "").strip()])
     missing_time_or_location_count = len([row for row in rows if not has_time_or_location(row)])
@@ -109,6 +167,10 @@ def build_task_qa(task: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str,
         issues.append("missing_time_or_location")
     if missing_source_chunk_count:
         issues.append("missing_source_chunk")
+    if batch_metrics["missing_ai_extraction_batch_count"]:
+        issues.append("missing_ai_extraction_batch")
+    if batch_metrics["truncated_batch_count"]:
+        issues.append("truncated_batch")
 
     if "no_comments_collected" in issues:
         status = "failed"
@@ -126,6 +188,7 @@ def build_task_qa(task: dict[str, Any], rows: list[dict[str, Any]]) -> dict[str,
         "missing_user_name_count": missing_user_name_count,
         "missing_time_or_location_count": missing_time_or_location_count,
         "missing_source_chunk_count": missing_source_chunk_count,
+        **batch_metrics,
     }
 
     return {
@@ -153,7 +216,11 @@ def build_qa_summary(project_dir: str | Path, out: str | Path | None = None) -> 
     comments = read_jsonl(root / "all-normalized-comments.jsonl")
     comments_by_task = group_comments_by_task(comments)
     task_results = [
-        build_task_qa(task, comments_by_task.get(str(task.get("task_id") or ""), []))
+        build_task_qa(
+            task,
+            comments_by_task.get(str(task.get("task_id") or ""), []),
+            read_task_batch_metrics(root, str(task.get("task_id") or "")),
+        )
         for task in tasks
     ]
     status_counts = Counter(task["status"] for task in task_results)
@@ -167,6 +234,12 @@ def build_qa_summary(project_dir: str | Path, out: str | Path | None = None) -> 
         "failed_count": status_counts.get("failed", 0),
         "total_expected_comment_count": sum(task["expected_comment_count"] for task in task_results),
         "total_actual_comment_count": sum(task["actual_comment_count"] for task in task_results),
+        "total_batch_count": sum(task["batch_count"] for task in task_results),
+        "total_empty_batch_count": sum(task["empty_batch_count"] for task in task_results),
+        "total_missing_ai_extraction_batch_count": sum(
+            task["missing_ai_extraction_batch_count"] for task in task_results
+        ),
+        "total_truncated_batch_count": sum(task["truncated_batch_count"] for task in task_results),
         "tasks": task_results,
     }
 

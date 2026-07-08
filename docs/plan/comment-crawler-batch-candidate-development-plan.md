@@ -592,7 +592,7 @@ test/pipeline/test_comment_excel_delivery_skill.py
 | 4 | 已完成 | 新增 batch prompt | 高 | 低 | `prompts/comment-candidate-batch-extraction.md` | AI 输出引用 candidate_id |
 | 5 | 已完成 | normalizer 支持 batch 输入 | 很高 | 中 | 增强 `normalize-ai-comment-extraction.js` | batch AI JSON 可转 JSONL |
 | 6 | 已完成 | 新增任务级 batch 合并 | 很高 | 中 | `merge_task_batches.py` | 多 batch 可生成任务级 normalized JSONL |
-| 7 | 待开始 | 项目级 merge/QA/resume 兼容 batch | 很高 | 中 | pipeline 增强 | Excel 流程不关心底层是 snapshot 还是 batch |
+| 7 | 已完成 | 项目级 merge/QA/resume 兼容 batch | 很高 | 中 | pipeline 增强 | Excel 流程不关心底层是 snapshot 还是 batch |
 | 8 | 待开始 | Skill 和 MCP 文档改为 batch 主路径 | 高 | 低 | skill workflow + usage docs | AI 按 skill 不再走整页 snapshot |
 | 9 | 待开始 | 增加自动循环批采工具 | 中高 | 中高 | `capture_comment_candidate_batches_until_idle` | 大评论量页面可半自动跑完 |
 | 10 | 待开始 | 平台候选提取精修 | 高 | 中高 | 抖音/小红书 selector 增强 | 噪声率下降，AI rejected 减少 |
