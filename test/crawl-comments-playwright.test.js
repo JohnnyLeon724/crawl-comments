@@ -72,6 +72,16 @@ test('detects Xiaohongshu login wall before comment extraction', () => {
   assert.match(block.message, /登录/);
 });
 
+test('does not report Xiaohongshu login wall on Douyin pages', () => {
+  const block = runner.detectPageBlock(
+    '请登录 登录后查看 手机号登录 获取验证码 用户协议 隐私政策',
+    'https://www.douyin.com/video/123'
+  );
+
+  assert.equal(block.blocked, false);
+  assert.equal(block.reason, '');
+});
+
 test('waits for Xiaohongshu login wall to clear before continuing', async () => {
   const snapshots = [
     {

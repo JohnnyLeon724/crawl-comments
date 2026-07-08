@@ -385,8 +385,20 @@ function buildLaunchOptions(args, chromium) {
 function detectPageBlock(text, pageUrl = '') {
   const compact = String(text || '').replace(/\s+/g, '');
   const url = String(pageUrl || '');
+  let host = '';
 
-  if (/website-login\/error|error_code=300017|error_code=300031/.test(url) || /安全限制|访问链接异常/.test(compact)) {
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch (_error) {
+    host = '';
+  }
+
+  const isXiaohongshu = host.includes('xiaohongshu.com');
+
+  if (
+    (isXiaohongshu && /website-login\/error|error_code=300017|error_code=300031/.test(url)) ||
+    /安全限制|访问链接异常/.test(compact)
+  ) {
     return {
       blocked: true,
       reason: 'security_block',
@@ -407,7 +419,7 @@ function detectPageBlock(text, pageUrl = '') {
   ];
   const signalCount = loginSignals.filter(pattern => pattern.test(compact)).length;
 
-  if (signalCount >= 2) {
+  if (isXiaohongshu && signalCount >= 2) {
     return {
       blocked: true,
       reason: 'auth_required',

@@ -17,6 +17,7 @@
     maxButtonTextLength: 24,
     minCommentTextLength: 2,
     maxCommentTextLength: 500,
+    maxStalledNewComments: 3,
     extractComments: true,
     logEveryRound: true
   };
@@ -566,11 +567,25 @@
     return '';
   };
 
-  const isMeaningfulProgress = info => {
+  const isMeaningfulProgress = (info, userConfig = {}) => {
+    const config = mergeConfig(userConfig);
+    const scrollChanged = Boolean(info.scrollResult && info.scrollResult.changed);
+    const addedComments = Number(info.addedComments) || 0;
+    const clickedThisRound = Number(info.clickedThisRound) || 0;
+
+    if (
+      clickedThisRound === 0 &&
+      !scrollChanged &&
+      addedComments > 0 &&
+      addedComments <= config.maxStalledNewComments
+    ) {
+      return false;
+    }
+
     return (
-      info.clickedThisRound > 0 ||
-      info.addedComments > 0 ||
-      Boolean(info.scrollResult && info.scrollResult.changed)
+      clickedThisRound > 0 ||
+      addedComments > 0 ||
+      scrollChanged
     );
   };
 
@@ -693,7 +708,7 @@
           mutationDelta,
           scrollResult,
           addedComments
-        });
+        }, config);
 
         state.idleRounds = progressed ? 0 : state.idleRounds + 1;
         state.elapsedMs = Date.now() - startedAt;

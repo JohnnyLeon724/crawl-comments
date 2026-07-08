@@ -199,6 +199,13 @@ test('does not treat mutation-only churn at the bottom as meaningful progress', 
     addedComments: 2,
     mutationDelta: 0,
     scrollResult: { changed: false }
+  }), false);
+
+  assert.equal(expander.isMeaningfulProgress({
+    clickedThisRound: 0,
+    addedComments: 4,
+    mutationDelta: 0,
+    scrollResult: { changed: false }
   }), true);
 });
 
