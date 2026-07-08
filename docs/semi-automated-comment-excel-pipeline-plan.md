@@ -189,6 +189,14 @@ python src/pipeline/parse_client_requirements.py \
 output/michelin_kol_0630/crawl-tasks.json
 ```
 
+如果输入是历史 B 站交付表，可先导入为同一套项目产物：
+
+```bash
+python src/pipeline/import_bilibili_delivery.py \
+  --input docs/bilibili_comments_all_phases.xlsx \
+  --out-dir output/bilibili_imported
+```
+
 ### 4.2 单条任务采集
 
 由 Codex 调用 `comment-crawler-v2`：
@@ -283,7 +291,7 @@ python src/pipeline/build_client_comment_excel.py \
 | 8 | 已完成 | 项目结构解耦与仓库瘦身 | 高 | 中 | 分层目录、归档目录、清理清单 | 脚本、测试、文档、样例数据分类清楚，删除或归档非必须文件 |
 | 9 | 已完成 | QA 与差异标记 | 高 | 中 | `src/pipeline/qa_comment_delivery.py`、`qa-summary.json`、Excel 状态列 | 识别 `ok/partial/failed` 和数量差异 |
 | 10 | 已完成 | 批量断点续跑 | 高 | 中 | `src/pipeline/resume_comment_project.py`、`resume-plan.json` | 失败任务可重跑，不覆盖已完成任务 |
-| 11 | 待开始 | B站字段兼容 | 中 | 中 | B站 adapter 映射 | 兼容 `bilibili_comments_all_phases.xlsx` 的字段习惯 |
+| 11 | 已完成 | B站字段兼容 | 中 | 中 | `src/pipeline/import_bilibili_delivery.py` | 兼容 `bilibili_comments_all_phases.xlsx` 的字段习惯 |
 | 12 | 待开始 | 沉淀为 Codex skill | 中高 | 低 | `comment-excel-delivery` skill | Codex 可按固定流程处理新客户表 |
 
 ## 6. 第一轮开发范围
