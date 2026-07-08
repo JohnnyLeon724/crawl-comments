@@ -240,3 +240,48 @@ test('captures a page candidate batch from browser records', async () => {
   assert.equal(batch.candidates[0].inner_text, '用户B 新回复内容');
   assert.equal(batch.state.seen_candidate_count, 2);
 });
+
+test('uses platform selectors and rejects comment-like noise containers', () => {
+  assert.match(candidates.getCandidateSelector('douyin'), /comment-item/);
+  assert.match(candidates.getCandidateSelector('xiaohongshu'), /parent-comment/);
+
+  const footer = makeElement({
+    className: 'comment-footer',
+    text: '关于我们 用户协议 隐私政策',
+    rect: { top: 80, height: 48 }
+  });
+  const login = makeElement({
+    className: 'comment-login-modal',
+    text: '手机号登录 获取验证码',
+    rect: { top: 120, height: 120 }
+  });
+  const douyinComment = makeElement({
+    className: 'CommentItem',
+    attrs: { 'data-e2e': 'comment-item' },
+    text: '抖音用户 这条轮胎评论很有参考价值 2月前 江苏',
+    rect: { top: 240, height: 88 }
+  });
+  const xhsReply = makeElement({
+    className: 'reply-container',
+    attrs: { 'data-testid': 'comment-item-reply' },
+    text: '小红书用户 回复内容 04-04 上海',
+    rect: { top: 360, height: 72 }
+  });
+
+  const batch = candidates.buildCommentDomBatchFromElements([
+    footer,
+    login,
+    douyinComment,
+    xhsReply
+  ], {
+    taskId: 'task_0003',
+    batchId: 'batch_0001',
+    viewportHeight: 900
+  });
+
+  assert.equal(batch.candidates.length, 2);
+  assert.deepEqual(batch.candidates.map(candidate => candidate.inner_text), [
+    '抖音用户 这条轮胎评论很有参考价值 2月前 江苏',
+    '小红书用户 回复内容 04-04 上海'
+  ]);
+});

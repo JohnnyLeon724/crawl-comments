@@ -4,6 +4,36 @@ const crypto = require('node:crypto');
 
 const DEFAULT_MAX_CANDIDATES = 80;
 const DEFAULT_MAX_CHARS_PER_CANDIDATE = 2500;
+const BASE_CANDIDATE_SELECTORS = Object.freeze([
+  '[data-e2e*="comment"]',
+  '[data-e2e*="reply"]',
+  '[data-testid*="comment"]',
+  '[data-testid*="reply"]',
+  '[class*="comment"]',
+  '[class*="reply"]',
+  '[class*="Comment"]',
+  '[class*="Reply"]',
+  '[class*="评论"]',
+  '[class*="回复"]'
+]);
+const PLATFORM_CANDIDATE_SELECTORS = Object.freeze({
+  douyin: Object.freeze([
+    '[data-e2e*="comment-item"]',
+    '[data-e2e*="reply-item"]',
+    '[data-e2e*="video-comment"]',
+    '[class*="CommentItem"]',
+    '[class*="comment-item"]',
+    '[class*="reply-item"]'
+  ]),
+  xiaohongshu: Object.freeze([
+    '[class*="comments-el"]',
+    '[class*="comment-item"]',
+    '[class*="parent-comment"]',
+    '[class*="reply-container"]',
+    '[data-testid*="comment-item"]',
+    '[data-testid*="reply"]'
+  ])
+});
 
 function toPositiveInteger(value, fallback) {
   const parsed = Number(value);
@@ -41,6 +71,11 @@ function cleanText(value) {
   return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
 }
 
+function getCandidateSelector(platform = 'unknown') {
+  const platformSelectors = PLATFORM_CANDIDATE_SELECTORS[String(platform || '').toLowerCase()] || [];
+  return Array.from(new Set([...platformSelectors, ...BASE_CANDIDATE_SELECTORS])).join(',');
+}
+
 function stripUnsafeHtml(value) {
   return cleanText(value)
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -62,6 +97,7 @@ function isNoiseText(value) {
     /©\s*2014-2026|电话：?9501-3888|地址：?上海市黄浦区/,
     /00:00.*倍速|2K\s*高帧率|1080P\s*高清|请刷新试试/,
     /精选推荐搜索关注|下载抖音|内容由AI生成|章节要点/,
+    /手机号登录|获取验证码|用户协议|隐私政策|登录后推荐/,
     /播放\s*\d{2}:\d{2}.*全屏/
   ].some(pattern => pattern.test(text));
 }
@@ -83,6 +119,20 @@ function getRoleHint(el) {
   if (/reply|回复/.test(marker)) return 'reply_candidate';
   if (/comment|评论/.test(marker)) return 'comment_candidate';
   return 'unknown';
+}
+
+function isNoiseMarker(value) {
+  const marker = cleanText(value).toLowerCase();
+  if (!marker) return false;
+
+  return [
+    /footer|copyright|license|beian|icp/,
+    /login|modal|passport|captcha|verify/,
+    /nav|navbar|sidebar|toolbar|header/,
+    /player|video-control|control-bar|progress/,
+    /download|recommend|search|suggest/,
+    /广告|登录|验证码|导航|搜索|推荐|页脚/
+  ].some(pattern => pattern.test(marker));
 }
 
 function getDomPath(el, maxDepth = 8) {
@@ -150,6 +200,7 @@ function isCandidateElement(el, options) {
 
   const text = cleanText(el.innerText || el.textContent);
   if (isNoiseText(text)) return false;
+  if (isNoiseMarker(getElementMarker(el))) return false;
 
   const roleHint = getRoleHint(el);
   return roleHint === 'comment_candidate' || roleHint === 'reply_candidate';
@@ -175,6 +226,7 @@ function buildCommentDomBatchFromRecords(records, options = {}) {
   for (const record of Array.from(records || [])) {
     const roleHint = String(record && record.role_hint || '');
     const rawText = cleanText(record && record.inner_text);
+    const marker = cleanText(record && record.marker);
     const rect = Object.assign({
       top: 0,
       left: 0,
@@ -185,6 +237,7 @@ function buildCommentDomBatchFromRecords(records, options = {}) {
     if (!isSupportedRoleHint(roleHint)) continue;
     if (!isVisibleRect(rect, normalized.viewportHeight)) continue;
     if (isNoiseText(rawText)) continue;
+    if (isNoiseMarker(marker)) continue;
 
     const innerText = normalized.includeText
       ? rawText.slice(0, normalized.maxCharsPerCandidate)
@@ -344,8 +397,29 @@ async function captureCommentCandidateBatch(page, options = {}) {
         /©\s*2014-2026|电话：?9501-3888|地址：?上海市黄浦区/,
         /00:00.*倍速|2K\s*高帧率|1080P\s*高清|请刷新试试/,
         /精选推荐搜索关注|下载抖音|内容由AI生成|章节要点/,
+        /手机号登录|获取验证码|用户协议|隐私政策|登录后推荐/,
         /播放\s*\d{2}:\d{2}.*全屏/
       ].some(pattern => pattern.test(text));
+    };
+    const elementMarker = el => [
+      el.id || '',
+      el.className || '',
+      el.getAttribute && el.getAttribute('data-e2e') || '',
+      el.getAttribute && el.getAttribute('data-testid') || '',
+      el.getAttribute && el.getAttribute('aria-label') || ''
+    ].join(' ').toLowerCase();
+    const isNoiseMarker = value => {
+      const marker = cleanText(value).toLowerCase();
+      if (!marker) return false;
+
+      return [
+        /footer|copyright|license|beian|icp/,
+        /login|modal|passport|captcha|verify/,
+        /nav|navbar|sidebar|toolbar|header/,
+        /player|video-control|control-bar|progress/,
+        /download|recommend|search|suggest/,
+        /广告|登录|验证码|导航|搜索|推荐|页脚/
+      ].some(pattern => pattern.test(marker));
     };
     const getScrollTop = () => Number(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0);
     const getDocumentHeight = () => Math.max(
@@ -372,13 +446,7 @@ async function captureCommentCandidateBatch(page, options = {}) {
       return parts.join('>');
     };
     const roleHint = el => {
-      const marker = [
-        el.id || '',
-        el.className || '',
-        el.getAttribute && el.getAttribute('data-e2e') || '',
-        el.getAttribute && el.getAttribute('data-testid') || '',
-        el.getAttribute && el.getAttribute('aria-label') || ''
-      ].join(' ').toLowerCase();
+      const marker = elementMarker(el);
 
       if (/reply|回复/.test(marker)) return 'reply_candidate';
       if (/comment|评论/.test(marker)) return 'comment_candidate';
@@ -406,23 +474,15 @@ async function captureCommentCandidateBatch(page, options = {}) {
       if (!viewportHeight) return true;
       return rect.top + rect.height >= 0 && rect.top <= viewportHeight;
     };
-    const selector = [
-      '[data-e2e*="comment"]',
-      '[data-e2e*="reply"]',
-      '[data-testid*="comment"]',
-      '[data-testid*="reply"]',
-      '[class*="comment"]',
-      '[class*="reply"]',
-      '[class*="Comment"]',
-      '[class*="Reply"]',
-      '[class*="评论"]',
-      '[class*="回复"]'
-    ].join(',');
+    const selector = config.candidateSelector;
     const beforeTop = getScrollTop();
     const viewportHeight = Number(window.innerHeight || document.documentElement.clientHeight || 0);
     const records = [];
 
     for (const el of Array.from(document.querySelectorAll(selector))) {
+      const marker = elementMarker(el);
+      if (isNoiseMarker(marker)) continue;
+
       const role = roleHint(el);
       if (role !== 'comment_candidate' && role !== 'reply_candidate') continue;
 
@@ -435,6 +495,7 @@ async function captureCommentCandidateBatch(page, options = {}) {
       records.push({
         dom_path: getDomPath(el),
         role_hint: role,
+        marker,
         inner_text: config.includeText ? innerText : '',
         html: config.includeHtml ? stripUnsafeHtml(el.outerHTML || '') : '',
         nearby_buttons: nearbyButtons(el),
@@ -459,6 +520,7 @@ async function captureCommentCandidateBatch(page, options = {}) {
     };
   }, {
     ...normalized,
+    candidateSelector: getCandidateSelector(normalized.platform),
     scrollAfterCapture,
     scrollStepRatio
   });
@@ -476,8 +538,10 @@ module.exports = {
   toPositiveInteger,
   normalizeCandidateOptions,
   cleanText,
+  getCandidateSelector,
   stripUnsafeHtml,
   isNoiseText,
+  isNoiseMarker,
   getRoleHint,
   getDomPath,
   getRect,
