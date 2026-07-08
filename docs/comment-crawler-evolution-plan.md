@@ -1,6 +1,6 @@
 # 评论采集、AI 结构化与 Excel 报表演进计划书
 
-更新时间：2026-07-07
+更新时间：2026-07-08
 
 ## 1. 目标
 
@@ -43,7 +43,7 @@
 建议目录：
 
 ```text
-scripts/
+script/
   crawl-comments-playwright.js
   normalize-comments.js
   prepare-comment-ai-review.js
@@ -88,6 +88,7 @@ output/
 | 10 | 已完成 | 人工 QA 与 prompt 迭代 | 高 | 低 | QA 样本与误判记录 | 抽样检查误判可定位到 prompt 或清洗问题 |
 | 11 | 已完成 | 扩展小红书 adapter | 中 | 中 | `adapters/xiaohongshu.js` | 复用同一 runner 输出标准 row |
 | 12 | 已完成 | 工程化增强 | 中 | 高 | 配置文件、日志、测试夹具 | 可长期维护，但不阻塞前期收益 |
+| 13 | 已完成 | 登录墙等待与浏览器保活 | 高 | 低 | `--login-timeout-ms`、CDP disconnect | 小红书登录墙出现时浏览器保持打开，登录后继续采集 |
 
 ## 5. 各阶段说明
 
@@ -121,7 +122,7 @@ output/
 需要支持：
 
 ```bash
-node scripts/crawl-comments-playwright.js \
+node script/crawl-comments-playwright.js \
   --url "https://www.douyin.com/..." \
   --cdp http://127.0.0.1:9222 \
   --out-dir output/run_2026-07-07_001
@@ -130,10 +131,20 @@ node scripts/crawl-comments-playwright.js \
 同时支持独立 profile：
 
 ```bash
-node scripts/crawl-comments-playwright.js \
+node script/crawl-comments-playwright.js \
   --url "https://www.douyin.com/..." \
   --profile .pw-profile \
   --out-dir output/run_2026-07-07_001
+```
+
+遇到小红书登录墙时，Runner 默认会保持 Chrome 打开等待 5 分钟。完成登录后脚本会继续注入展开脚本并采集评论；如果希望调整等待时间，可以使用：
+
+```bash
+node script/crawl-comments-playwright.js \
+  --url "https://www.xiaohongshu.com/explore/<note_id>?xsec_token=<redacted>&..." \
+  --profile .pw-profile \
+  --out-dir output/run_2026-07-08_001 \
+  --login-timeout-ms 300000
 ```
 
 验收重点：
@@ -205,7 +216,7 @@ node scripts/crawl-comments-playwright.js \
 等单 URL 稳定后，再支持：
 
 ```bash
-node scripts/crawl-comments-playwright.js \
+node script/crawl-comments-playwright.js \
   --input urls.txt \
   --out-dir output/run_2026-07-07_002 \
   --resume \
@@ -333,6 +344,22 @@ AI 不参与爬取，只处理归一化后的评论。
 
 这些投入较高，早做容易拖慢核心闭环。
 
+### 阶段 13：登录墙等待与浏览器保活
+
+小红书测试中出现登录墙时，旧逻辑会立即失败并关闭 Playwright 打开的 Chrome，导致用户来不及登录。第一版修正为：
+
+- `--login-timeout-ms` 控制登录等待时间，默认 300000ms。
+- 检测到 `auth_required` 后保持 Chrome 打开，并轮询页面是否恢复。
+- 用户在打开的 Chrome 中完成登录后，Runner 自动继续注入展开脚本并采集评论。
+- 如果连接的是已有 Chrome CDP，会使用 `disconnect()` 断开 Playwright 连接，避免关闭外部浏览器。
+
+验收标准：
+
+- 登录墙不再几秒后关闭浏览器。
+- 登录完成后同一次运行可以继续采集。
+- 登录超时、风控页仍能写入失败 manifest。
+- 单测覆盖参数解析、登录等待、等待超时和 CDP 断开行为。
+
 ## 6. 暂不建议做的事情
 
 短期不要做：
@@ -346,12 +373,12 @@ AI 不参与爬取，只处理归一化后的评论。
 
 原因：这些成本高、失败面大，而且会遮住当前最大的不确定性：真实页面评论能否稳定展开和抽取。
 
-## 7. 最近三步
+## 7. 最近完成与下一步
 
-按投入产出比，下一步只做这三件事：
+最近完成：
 
-1. 写 `scripts/crawl-comments-playwright.js`，支持单 URL、CDP/profile、输出 raw JSON/CSV。
-2. 用 1 条抖音 URL 跑通完整链路，检查 `stop_reason`、评论数量和 raw 文本质量。
-3. 根据样本补 `adapters/douyin.js`，只修最明显的混入字段和层级问题。
+1. Playwright Runner、批量续跑、归一化、AI 结构化、Excel 报表和 QA 抽样链路已打通。
+2. 小红书 adapter 已参考 `clis/xiaohongshu` 的 URL 与评论字段形态完成第一版。
+3. 小红书登录墙等待与浏览器保活已完成，登录后可继续同一次采集。
 
-这三步完成后，再进入批量 URL 和 AI 结构化。这样每一步都有可交付结果，也能及时发现页面结构、风控、登录态和抽取质量问题。
+下一步建议只做真实样本验证：用已登录 profile 跑 1 条小红书 URL，检查 `stop_reason`、评论数量、raw 文本质量和归一化结果，再决定是否继续精修页面展开规则或 adapter。

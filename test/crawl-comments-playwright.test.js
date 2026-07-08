@@ -30,6 +30,16 @@ test('defaults to a persistent profile when no CDP endpoint is provided', () => 
 
   assert.equal(args.profile, '.pw-profile');
   assert.equal(args.headless, false);
+  assert.equal(args.loginTimeoutMs, 300000);
+});
+
+test('parses login wait timeout argument', () => {
+  const args = runner.parseArgs([
+    '--url', 'https://www.xiaohongshu.com/explore/abc',
+    '--login-timeout-ms', '120000'
+  ]);
+
+  assert.equal(args.loginTimeoutMs, 120000);
 });
 
 test('loads Playwright from bundled runtime when local dependency is missing', () => {
@@ -60,6 +70,82 @@ test('detects Xiaohongshu login wall before comment extraction', () => {
   assert.equal(block.blocked, true);
   assert.equal(block.reason, 'auth_required');
   assert.match(block.message, /登录/);
+});
+
+test('waits for Xiaohongshu login wall to clear before continuing', async () => {
+  const snapshots = [
+    {
+      href: 'https://www.xiaohongshu.com/explore/abc',
+      text: '登录后推荐更懂你的笔记 手机号登录 获取验证码 用户协议 隐私政策'
+    },
+    {
+      href: 'https://www.xiaohongshu.com/explore/abc',
+      text: '登录后推荐更懂你的笔记 手机号登录 获取验证码 用户协议 隐私政策'
+    },
+    {
+      href: 'https://www.xiaohongshu.com/explore/abc',
+      text: '这是一条正常评论 展开更多回复'
+    }
+  ];
+  let evaluateCount = 0;
+  let now = 0;
+  const page = {
+    evaluate: async () => snapshots[Math.min(evaluateCount++, snapshots.length - 1)]
+  };
+
+  const result = await runner.waitForPageBlockToClear(page, {
+    loginTimeoutMs: 3000,
+    loginPollMs: 1000
+  }, {
+    sleep: async ms => {
+      now += ms;
+    },
+    now: () => now,
+    log: () => {}
+  });
+
+  assert.equal(result.waited, true);
+  assert.equal(result.reason, 'auth_required');
+  assert.equal(evaluateCount, 3);
+});
+
+test('times out while waiting for login wall to clear', async () => {
+  let now = 0;
+  const page = {
+    evaluate: async () => ({
+      href: 'https://www.xiaohongshu.com/explore/abc',
+      text: '登录后推荐更懂你的笔记 手机号登录 获取验证码 用户协议 隐私政策'
+    })
+  };
+
+  await assert.rejects(
+    () => runner.waitForPageBlockToClear(page, {
+      loginTimeoutMs: 1000,
+      loginPollMs: 500
+    }, {
+      sleep: async ms => {
+        now += ms;
+      },
+      now: () => now,
+      log: () => {}
+    }),
+    error => {
+      assert.equal(error.stopReason, 'auth_required');
+      assert.match(error.message, /登录等待超时/);
+      return true;
+    }
+  );
+});
+
+test('disconnects CDP sessions without closing the external browser', async () => {
+  const calls = [];
+
+  await runner.closeCdpBrowser({
+    disconnect: () => calls.push('disconnect'),
+    close: async () => calls.push('close')
+  });
+
+  assert.deepEqual(calls, ['disconnect']);
 });
 
 test('rejects missing URL and conflicting browser modes', () => {

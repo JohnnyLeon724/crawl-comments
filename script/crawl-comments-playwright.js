@@ -19,6 +19,8 @@ const DEFAULTS = {
   delayMs: 0,
   retries: 0,
   headless: false,
+  loginTimeoutMs: 5 * 60 * 1000,
+  loginPollMs: 1000,
   viewportWidth: 1440,
   viewportHeight: 1000
 };
@@ -54,6 +56,7 @@ function printUsage() {
   --out-dir         可选，输出目录；默认 output/<run_id>
   --timeout-ms      可选，等待页面内脚本结束的超时时间，默认 900000
   --post-load-ms    可选，页面打开后注入脚本前等待时间，默认 5000
+  --login-timeout-ms 可选，遇到登录墙时保持浏览器打开等待登录的时间，默认 300000；设为 0 则立即失败
   --delay-ms        可选，批量模式下每个 URL 之间的等待时间，默认 0
   --retries         可选，单个 URL 失败后的重试次数，默认 0
   --resume          可选，批量模式下跳过已有成功 manifest 的 URL
@@ -78,6 +81,14 @@ function parsePositiveInt(value, name) {
   return Math.floor(parsed);
 }
 
+function parseNonNegativeInt(value, name) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${name} 必须是非负整数`);
+  }
+  return Math.floor(parsed);
+}
+
 function parseArgs(argv) {
   const args = {
     url: '',
@@ -91,6 +102,8 @@ function parseArgs(argv) {
     retries: DEFAULTS.retries,
     resume: false,
     headless: DEFAULTS.headless,
+    loginTimeoutMs: DEFAULTS.loginTimeoutMs,
+    loginPollMs: DEFAULTS.loginPollMs,
     viewport: {
       width: DEFAULTS.viewportWidth,
       height: DEFAULTS.viewportHeight
@@ -154,6 +167,12 @@ function parseArgs(argv) {
 
     if (token === '--post-load-ms') {
       args.postLoadWaitMs = parsePositiveInt(readFlagValue(argv, i, token), token);
+      i += 1;
+      continue;
+    }
+
+    if (token === '--login-timeout-ms') {
+      args.loginTimeoutMs = parseNonNegativeInt(readFlagValue(argv, i, token), token);
       i += 1;
       continue;
     }
@@ -403,6 +422,87 @@ function detectPageBlock(text, pageUrl = '') {
   };
 }
 
+async function getPageSnapshot(page) {
+  return page.evaluate(() => ({
+    href: location.href,
+    text: document.body?.innerText || ''
+  }));
+}
+
+function createPageBlockError(block, message = '') {
+  const error = new Error(message || block.message);
+  error.stopReason = block.reason;
+  return error;
+}
+
+async function waitForPageBlockToClear(page, args, deps = {}) {
+  const sleepFn = deps.sleep || sleep;
+  const nowFn = deps.now || Date.now;
+  const logFn = typeof deps.log === 'function' ? deps.log : console.warn;
+  const loginTimeoutMs = Number.isFinite(args.loginTimeoutMs)
+    ? args.loginTimeoutMs
+    : DEFAULTS.loginTimeoutMs;
+  const loginPollMs = Number.isFinite(args.loginPollMs) && args.loginPollMs > 0
+    ? args.loginPollMs
+    : DEFAULTS.loginPollMs;
+  let snapshot = await getPageSnapshot(page);
+  let block = detectPageBlock(snapshot.text, snapshot.href);
+
+  if (!block.blocked) {
+    return {
+      waited: false,
+      reason: '',
+      snapshot
+    };
+  }
+
+  if (block.reason !== 'auth_required') {
+    throw createPageBlockError(block);
+  }
+
+  if (loginTimeoutMs <= 0) {
+    throw createPageBlockError(block);
+  }
+
+  logFn(`${block.message}；Chrome 窗口会保持打开，最多等待 ${loginTimeoutMs}ms`);
+
+  const deadline = nowFn() + loginTimeoutMs;
+
+  while (true) {
+    const remainingMs = deadline - nowFn();
+    if (remainingMs <= 0) break;
+
+    await sleepFn(Math.min(loginPollMs, remainingMs));
+    snapshot = await getPageSnapshot(page);
+    block = detectPageBlock(snapshot.text, snapshot.href);
+
+    if (!block.blocked) {
+      return {
+        waited: true,
+        reason: 'auth_required',
+        snapshot
+      };
+    }
+
+    if (block.reason !== 'auth_required') {
+      throw createPageBlockError(block);
+    }
+  }
+
+  throw createPageBlockError(block, `登录等待超时（${loginTimeoutMs}ms）：请先在 Chrome 中完成登录，再重新运行采集命令`);
+}
+
+async function closeCdpBrowser(browser) {
+  if (browser && typeof browser.disconnect === 'function') {
+    browser.disconnect();
+    return;
+  }
+
+  if (browser && typeof browser.close === 'function') {
+    await browser.close();
+  }
+}
+
 async function openBrowser(args) {
   const { chromium } = loadPlaywright();
 
@@ -414,7 +514,7 @@ async function openBrowser(args) {
     return {
       page,
       close: async () => {
-        await browser.close();
+        await closeCdpBrowser(browser);
       }
     };
   }
@@ -453,16 +553,7 @@ async function crawlSingleUrl(args) {
     });
     await page.waitForTimeout(args.postLoadWaitMs);
 
-    const pageSnapshot = await page.evaluate(() => ({
-      href: location.href,
-      text: document.body?.innerText || ''
-    }));
-    const pageBlock = detectPageBlock(pageSnapshot.text, pageSnapshot.href);
-    if (pageBlock.blocked) {
-      const error = new Error(pageBlock.message);
-      error.stopReason = pageBlock.reason;
-      throw error;
-    }
+    await waitForPageBlockToClear(page, args);
 
     await page.evaluate(expanderScript);
     await page.waitForFunction(() => {
@@ -722,6 +813,8 @@ module.exports = {
   findChromeExecutable,
   buildLaunchOptions,
   detectPageBlock,
+  waitForPageBlockToClear,
+  closeCdpBrowser,
   crawlWithRetries,
   crawlBatch,
   crawlSingleUrl,
