@@ -379,6 +379,10 @@ function listTools() {
             type: 'number',
             description: 'Timeout for connecting to Chrome CDP.'
           },
+          sourceUrl: {
+            type: 'string',
+            description: 'Optional target URL. When provided, MCP opens this URL in the CDP Chrome before crawling.'
+          },
           outDir: {
             type: 'string',
             description: 'Task output directory under project output.'
@@ -469,6 +473,10 @@ function listTools() {
           connectTimeoutMs: {
             type: 'number',
             description: 'Timeout for connecting to Chrome CDP.'
+          },
+          sourceUrl: {
+            type: 'string',
+            description: 'Optional target URL. When provided, MCP opens this URL in the CDP Chrome before crawling.'
           },
           outDir: {
             type: 'string',
@@ -1319,6 +1327,7 @@ async function expandCurrentPageComments(args = {}, context = {}) {
     timeoutMs: Number.isFinite(Number(args.connectTimeoutMs))
       ? Number(args.connectTimeoutMs)
       : cdp.DEFAULT_CDP_TIMEOUT_MS,
+    sourceUrl: args.sourceUrl,
     playwright: context.playwright
   });
 
@@ -1371,6 +1380,7 @@ async function saveCurrentPageComments(args = {}, context = {}) {
     timeoutMs: Number.isFinite(Number(args.connectTimeoutMs))
       ? Number(args.connectTimeoutMs)
       : cdp.DEFAULT_CDP_TIMEOUT_MS,
+    sourceUrl: args.sourceUrl,
     playwright: context.playwright
   });
 
@@ -1440,7 +1450,7 @@ async function captureCurrentCommentDomSnapshot(args = {}, context = {}) {
 
   try {
     const page = session.page;
-    const sourceUrl = getPageUrl(page);
+    const sourceUrl = getPageUrl(page) || String(args.sourceUrl || '');
     security.assertAllowedPageUrl(sourceUrl, context.allowedHosts);
 
     const runId = args.runId || runner.createRunId();
@@ -1493,12 +1503,13 @@ async function captureCurrentCommentCandidateBatch(args = {}, context = {}) {
     timeoutMs: Number.isFinite(Number(args.connectTimeoutMs))
       ? Number(args.connectTimeoutMs)
       : cdp.DEFAULT_CDP_TIMEOUT_MS,
+    sourceUrl: args.sourceUrl,
     playwright: context.playwright
   });
 
   try {
     const page = session.page;
-    const sourceUrl = getPageUrl(page);
+    const sourceUrl = getPageUrl(page) || String(args.sourceUrl || '');
     security.assertAllowedPageUrl(sourceUrl, context.allowedHosts);
 
     const runId = args.runId || runner.createRunId();
@@ -1587,7 +1598,7 @@ async function captureCurrentCommentCandidateBatchesUntilIdle(args = {}, context
 
   try {
     const page = session.page;
-    const sourceUrl = getPageUrl(page);
+    const sourceUrl = getPageUrl(page) || String(args.sourceUrl || '');
     security.assertAllowedPageUrl(sourceUrl, context.allowedHosts);
 
     const runId = args.runId || runner.createRunId();
@@ -1694,12 +1705,13 @@ async function expandAndCaptureCommentBatches(args = {}, context = {}) {
     timeoutMs: Number.isFinite(Number(args.connectTimeoutMs))
       ? Number(args.connectTimeoutMs)
       : cdp.DEFAULT_CDP_TIMEOUT_MS,
+    sourceUrl: args.sourceUrl,
     playwright: context.playwright
   });
 
   try {
     const page = session.page;
-    const sourceUrl = getPageUrl(page);
+    const sourceUrl = getPageUrl(page) || String(args.sourceUrl || '');
     security.assertAllowedPageUrl(sourceUrl, context.allowedHosts);
 
     const runId = args.runId || runner.createRunId();

@@ -161,6 +161,49 @@ test('stage 3 connects to Chrome CDP and disconnects without closing Chrome', as
   assert.deepEqual(calls.slice(1), ['disconnect']);
 });
 
+test('stage 3 opens the requested sourceUrl in a new CDP page when provided', async () => {
+  const cdp = require(cdpPath);
+  const calls = [];
+  const openedPage = {
+    url: () => 'https://www.douyin.com/video/123',
+    goto: async (url, options) => calls.push(['goto', url, options.waitUntil, options.timeout])
+  };
+  const browser = {
+    contexts: () => [
+      {
+        pages: () => [],
+        newPage: async () => {
+          calls.push(['newPage']);
+          return openedPage;
+        }
+      }
+    ],
+    disconnect: () => calls.push(['disconnect'])
+  };
+  const playwright = {
+    chromium: {
+      connectOverCDP: async (endpoint, options) => {
+        calls.push(['connect', endpoint, options.timeout]);
+        return browser;
+      }
+    }
+  };
+
+  const session = await cdp.connectToCdp({
+    cdpEndpoint: 'http://127.0.0.1:9333',
+    timeoutMs: 1234,
+    sourceUrl: 'https://www.douyin.com/video/123',
+    playwright
+  });
+
+  assert.equal(session.page, openedPage);
+  assert.deepEqual(calls.slice(0, 3), [
+    ['connect', 'http://127.0.0.1:9333', 1234],
+    ['newPage'],
+    ['goto', 'https://www.douyin.com/video/123', 'domcontentloaded', 1234]
+  ]);
+});
+
 test('stage 3 falls back to raw CDP when Playwright cannot manage browser contexts', async () => {
   const cdp = require(cdpPath);
   const calls = [];
@@ -181,7 +224,7 @@ test('stage 3 falls back to raw CDP when Playwright cannot manage browser contex
       }
     },
     rawCdpConnect: async options => {
-      calls.push(['rawConnect', options.cdpEndpoint, options.timeoutMs]);
+      calls.push(['rawConnect', options.cdpEndpoint, options.timeoutMs, options.sourceUrl]);
       return rawSession;
     }
   });
@@ -190,7 +233,7 @@ test('stage 3 falls back to raw CDP when Playwright cannot manage browser contex
   await session.close();
   assert.deepEqual(calls, [
     ['playwrightConnect'],
-    ['rawConnect', 'http://127.0.0.1:9222', 1234],
+    ['rawConnect', 'http://127.0.0.1:9222', 1234, ''],
     ['rawClose']
   ]);
 });
@@ -1048,6 +1091,7 @@ test('expand_and_capture_comment_batches is exposed as the main coverage workflo
 
   assert.ok(captureTool);
   assert.equal(captureTool.inputSchema.properties.outDir.type, 'string');
+  assert.equal(captureTool.inputSchema.properties.sourceUrl.type, 'string');
   assert.equal(captureTool.inputSchema.properties.taskId.type, 'string');
   assert.equal(captureTool.inputSchema.properties.maxRounds.type, 'number');
   assert.equal(captureTool.inputSchema.properties.maxBatches.type, 'number');
@@ -1127,6 +1171,7 @@ test('expand_and_capture_comment_batches captures before scrolling and stops on 
   let round = 0;
 
   const result = await tools.callTool('expand_and_capture_comment_batches', {
+    sourceUrl: 'https://www.douyin.com/video/123',
     outDir,
     taskId: 'task_0001',
     maxRounds: 10,
@@ -1152,10 +1197,13 @@ test('expand_and_capture_comment_batches captures before scrolling and stops on 
     clickGapMsMax: 300,
     closePageAfter: true
   }, {
-    connectToCdp: async () => ({
+    connectToCdp: async options => {
+      calls.push(['connect', options.sourceUrl]);
+      return {
       page,
       close: async () => calls.push(['sessionClose'])
-    }),
+      };
+    },
     expandVisibleCommentsOnce: async (_page, options) => {
       calls.push(['expand', options.maxClicksPerRound, options.click.clickMode, options.click.clickJitterPx]);
       return {
@@ -1212,7 +1260,8 @@ test('expand_and_capture_comment_batches captures before scrolling and stops on 
   assert.equal(state.dom_click_count, 0);
   assert.equal(state.fallback_click_count, 0);
   assert.deepEqual(state.seen_candidate_hashes, ['hash-1', 'hash-2']);
-  assert.deepEqual(calls.slice(0, 8), [
+  assert.deepEqual(calls.slice(0, 9), [
+    ['connect', 'https://www.douyin.com/video/123'],
     ['expand', 3, 'coordinate', 2],
     ['sleep', 1],
     ['capture', 'batch_0001', false, 0],

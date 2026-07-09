@@ -56,6 +56,23 @@ async function selectCurrentPage(browser) {
   throw new Error('CDP browser has no available pages');
 }
 
+async function openSourcePage(browser, sourceUrl, timeoutMs = DEFAULT_CDP_TIMEOUT_MS) {
+  const { contexts } = getAllPages(browser);
+  const firstContext = contexts[0];
+  if (!firstContext || typeof firstContext.newPage !== 'function') {
+    throw new Error('CDP browser cannot open a new page for sourceUrl');
+  }
+
+  const page = await firstContext.newPage();
+  if (typeof page.goto === 'function') {
+    await page.goto(sourceUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: timeoutMs
+    });
+  }
+  return page;
+}
+
 async function readPageSnapshot(page) {
   const title = page && typeof page.title === 'function'
     ? await page.title()
@@ -91,8 +108,9 @@ function normalizeHttpEndpoint(endpoint) {
   return url.toString().replace(/\/$/, '');
 }
 
-async function fetchJson(url, timeoutMs = DEFAULT_CDP_TIMEOUT_MS) {
+async function fetchJson(url, timeoutMs = DEFAULT_CDP_TIMEOUT_MS, init = {}) {
   const response = await fetch(url, {
+    ...init,
     signal: AbortSignal.timeout(timeoutMs)
   });
 
@@ -106,6 +124,13 @@ async function fetchJson(url, timeoutMs = DEFAULT_CDP_TIMEOUT_MS) {
 async function listRawCdpTargets(endpoint, timeoutMs = DEFAULT_CDP_TIMEOUT_MS) {
   const base = normalizeHttpEndpoint(endpoint);
   return fetchJson(`${base}/json/list`, timeoutMs);
+}
+
+async function openRawCdpTarget(endpoint, sourceUrl, timeoutMs = DEFAULT_CDP_TIMEOUT_MS) {
+  const base = normalizeHttpEndpoint(endpoint);
+  return fetchJson(`${base}/json/new?${encodeURIComponent(sourceUrl)}`, timeoutMs, {
+    method: 'PUT'
+  });
 }
 
 function selectRawCdpTarget(targets) {
@@ -345,8 +370,17 @@ async function rawCdpConnect(options = {}) {
   const timeoutMs = Number.isFinite(Number(options.timeoutMs))
     ? Number(options.timeoutMs)
     : DEFAULT_CDP_TIMEOUT_MS;
-  const targets = await listRawCdpTargets(endpoint, timeoutMs);
-  const target = selectRawCdpTarget(targets);
+  const sourceUrl = String(options.sourceUrl || '').trim();
+  let target;
+  if (sourceUrl) {
+    const openedTarget = await openRawCdpTarget(endpoint, sourceUrl, timeoutMs);
+    target = openedTarget && openedTarget.webSocketDebuggerUrl
+      ? openedTarget
+      : selectRawCdpTarget(await listRawCdpTargets(endpoint, timeoutMs));
+  } else {
+    const targets = await listRawCdpTargets(endpoint, timeoutMs);
+    target = selectRawCdpTarget(targets);
+  }
   const client = await new RawCdpClient(target.webSocketDebuggerUrl, timeoutMs).connect();
   const page = createRawCdpPage(client, target);
 
@@ -374,11 +408,15 @@ async function connectToCdp(options = {}) {
     const fallbackConnect = options.rawCdpConnect || rawCdpConnect;
     return fallbackConnect({
       cdpEndpoint: endpoint,
-      timeoutMs: timeout
+      timeoutMs: timeout,
+      sourceUrl: String(options.sourceUrl || '').trim()
     });
   }
 
-  const page = await selectCurrentPage(browser);
+  const sourceUrl = String(options.sourceUrl || '').trim();
+  const page = sourceUrl
+    ? await openSourcePage(browser, sourceUrl, timeout)
+    : await selectCurrentPage(browser);
 
   return {
     browser,
@@ -395,10 +433,12 @@ module.exports = {
   getAllPages,
   isHttpPage,
   selectCurrentPage,
+  openSourcePage,
   readPageSnapshot,
   isContextManagementUnsupportedError,
   normalizeHttpEndpoint,
   listRawCdpTargets,
+  openRawCdpTarget,
   selectRawCdpTarget,
   RawCdpClient,
   createRawCdpPage,
