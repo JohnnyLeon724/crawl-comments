@@ -430,7 +430,9 @@ test('normalizes coordinate click configuration with safe defaults and clamped r
     clickDownMsMin: 200,
     clickDownMsMax: 60,
     clickGapMsMin: 900,
-    clickGapMsMax: 300
+    clickGapMsMax: 300,
+    postClickWaitMsMin: 1200,
+    postClickWaitMsMax: 600
   });
 
   assert.deepEqual(profile, {
@@ -439,7 +441,8 @@ test('normalizes coordinate click configuration with safe defaults and clamped r
     clickJitterPx: 0,
     mouseMoveSteps: { min: 4, max: 12 },
     clickDownMs: { min: 60, max: 200 },
-    clickGapMs: { min: 300, max: 900 }
+    clickGapMs: { min: 300, max: 900 },
+    postClickWaitMs: { min: 600, max: 1200 }
   });
 
   const config = tools.normalizeExpandCaptureConfig({
@@ -544,7 +547,9 @@ test('clickExpandTargets uses page.mouse with configured movement and hold timin
       clickDownMsMin: 60,
       clickDownMsMax: 60,
       clickGapMsMin: 300,
-      clickGapMsMax: 300
+      clickGapMsMax: 300,
+      postClickWaitMsMin: 700,
+      postClickWaitMsMax: 700
     }),
     sleep: async ms => sleeps.push(ms),
     random: () => 0
@@ -562,7 +567,7 @@ test('clickExpandTargets uses page.mouse with configured movement and hold timin
     ['down'],
     ['up']
   ]);
-  assert.deepEqual(sleeps, [60, 300, 60, 300]);
+  assert.deepEqual(sleeps, [60, 700, 60, 700]);
 });
 
 test('expandVisibleCommentsOnce falls back to DOM click when coordinate input is unavailable', async () => {
@@ -1106,6 +1111,7 @@ test('expand_and_capture_comment_batches is exposed as the main coverage workflo
   assert.equal(captureTool.inputSchema.properties.mouseMoveStepsMin.type, 'number');
   assert.equal(captureTool.inputSchema.properties.clickDownMsMax.type, 'number');
   assert.equal(captureTool.inputSchema.properties.clickGapMsMax.type, 'number');
+  assert.equal(captureTool.inputSchema.properties.postClickWaitMsMax.type, 'number');
   assert.equal(captureTool.inputSchema.properties.closePageAfter.type, 'boolean');
 });
 

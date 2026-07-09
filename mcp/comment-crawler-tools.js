@@ -43,7 +43,9 @@ const DEFAULT_CLICK_PROFILE = Object.freeze({
   clickDownMsMin: 60,
   clickDownMsMax: 160,
   clickGapMsMin: 300,
-  clickGapMsMax: 900
+  clickGapMsMax: 900,
+  postClickWaitMsMin: 300,
+  postClickWaitMsMax: 900
 });
 
 function resolveProjectRoot(options = {}) {
@@ -576,6 +578,14 @@ function listTools() {
             type: 'number',
             description: 'Maximum gap after each coordinate click.'
           },
+          postClickWaitMsMin: {
+            type: 'number',
+            description: 'Minimum wait after each click. Overrides clickGapMsMin when provided.'
+          },
+          postClickWaitMsMax: {
+            type: 'number',
+            description: 'Maximum wait after each click. Overrides clickGapMsMax when provided.'
+          },
           maxCandidates: {
             type: 'number',
             description: 'Maximum candidates captured in each non-empty batch.'
@@ -836,6 +846,13 @@ function normalizeClickMode(value, fallback) {
 }
 
 function normalizeClickProfile(args = {}) {
+  const clickGapMs = normalizeRange(
+    args.clickGapMsMin,
+    args.clickGapMsMax,
+    DEFAULT_CLICK_PROFILE.clickGapMsMin,
+    DEFAULT_CLICK_PROFILE.clickGapMsMax
+  );
+  const hasPostClickWait = args.postClickWaitMsMin !== undefined || args.postClickWaitMsMax !== undefined;
   return {
     clickMode: normalizeClickMode(args.clickMode, DEFAULT_CLICK_PROFILE.clickMode),
     fallbackClickMode: normalizeClickMode(args.fallbackClickMode, DEFAULT_CLICK_PROFILE.fallbackClickMode),
@@ -852,12 +869,15 @@ function normalizeClickProfile(args = {}) {
       DEFAULT_CLICK_PROFILE.clickDownMsMin,
       DEFAULT_CLICK_PROFILE.clickDownMsMax
     ),
-    clickGapMs: normalizeRange(
-      args.clickGapMsMin,
-      args.clickGapMsMax,
-      DEFAULT_CLICK_PROFILE.clickGapMsMin,
-      DEFAULT_CLICK_PROFILE.clickGapMsMax
-    )
+    clickGapMs,
+    postClickWaitMs: hasPostClickWait
+      ? normalizeRange(
+        args.postClickWaitMsMin,
+        args.postClickWaitMsMax,
+        DEFAULT_CLICK_PROFILE.postClickWaitMsMin,
+        DEFAULT_CLICK_PROFILE.postClickWaitMsMax
+      )
+      : clickGapMs
   };
 }
 
@@ -1060,7 +1080,7 @@ async function clickExpandTargets(page, targets = [], options = {}) {
       await page.mouse.down();
       await wait(pickRangeValue(click.clickDownMs, random));
       await page.mouse.up();
-      await wait(pickRangeValue(click.clickGapMs, random));
+      await wait(pickRangeValue(click.postClickWaitMs || click.clickGapMs, random));
       summary.clicked += 1;
       summary.coordinate_click_count += 1;
     } catch (error) {
