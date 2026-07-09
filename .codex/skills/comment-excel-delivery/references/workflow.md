@@ -23,10 +23,49 @@ python src/pipeline/import_bilibili_delivery.py \
 
 ## 2. Run One Task
 
-For each `runs/<task_id>/task.json`:
+For each `runs/<task_id>/task.json`, use `chrome:control-chrome` as the default browser execution surface.
 
-1. Keep Chrome running with CDP enabled and the target platform logged in. Do not manually reuse an old content tab as the task target.
-2. Use `expand_and_capture_comment_batches` as the default comment browser step. Pass the task URL as `sourceUrl`; the MCP tool opens a fresh task page, expands visible replies, captures DOM candidates before scrolling, saves bounded batches, and stops after idle, navigation-away, or configured limits:
+### Chrome default per-task workflow
+
+1. Connect to Chrome through the Chrome skill and use the user's logged-in Chrome session.
+2. Open a fresh tab for `task.source_url`; do not manually reuse an old content tab as the task target.
+3. Confirm the current page is the intended Douyin or Xiaohongshu target. If login, CAPTCHA, verification, privacy consent, or platform access checks appear, pause for user action and ask the user to handle them. Do not bypass the check or replace the platform page with another source.
+4. Use Chrome automation to click visible expand controls such as comments, replies, "展开更多", or "展开 N 条回复". Prefer bounded, repeated rounds over one large page scrape.
+5. In each round, capture the current visible comment candidate DOM before scrolling. Save non-empty batches using the existing schema and paths:
+
+```text
+output/<project_id>/runs/<task_id>/
+  capture-state.json
+  batches/<batch_id>/comment-dom-batch.json
+```
+
+6. Each `comment-dom-batch.json` must stay compatible with `comment-dom-batch-v1` and include `candidate_id`, `candidate_hash`, `dom_path`, `role_hint`, `inner_text`, `html`, `nearby_buttons`, `rect`, and `captured_at` for candidates when available.
+7. Update `capture-state.json` with `last_batch_id`, `next_batch_id`, seen candidate hashes, round counts, candidate totals, and stop reason.
+8. Stop after idle, navigation away, user-required verification, or configured runtime/batch limits. Close or finalize the task tab before moving to the next task.
+9. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
+10. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
+11. Normalize each batch:
+
+```bash
+node script/normalize-ai-comment-extraction.js \
+  --input output/<project_id>/runs/<task_id>/batches/<batch_id>/ai-comment-extraction.json \
+  --batch output/<project_id>/runs/<task_id>/batches/<batch_id>/comment-dom-batch.json \
+  --task output/<project_id>/runs/<task_id>/task.json \
+  --out output/<project_id>/runs/<task_id>/batches/<batch_id>/normalized-comments.jsonl
+```
+
+12. Merge task batches:
+
+```bash
+python src/pipeline/merge_task_batches.py \
+  --task-dir output/<project_id>/runs/<task_id>
+```
+
+### MCP/CDP fallback
+
+Use MCP/CDP only when Chrome extension control is unavailable, when the user explicitly requests the legacy path, or when debugging MCP capture behavior.
+
+Coordinate clicking remains the MCP fallback production interaction mode. The fallback main tool is `expand_and_capture_comment_batches`:
 
 ```text
 {
@@ -57,29 +96,7 @@ For each `runs/<task_id>/task.json`:
 }
 ```
 
-Coordinate clicking is used for production interaction compatibility. The tool validates the click point before pressing, skips obvious user/profile links, and stops with `navigation-away` if a click still leaves the source page. If coordinate input is unavailable, the MCP tool falls back to `dom-click`; login, CAPTCHA, or verification pages should stop the run for user action.
-
-3. Use `capture-state.json` to confirm the generated batch range. The tool writes `batches/<batch_id>/comment-dom-batch.json` for non-empty batches.
-4. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
-5. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
-6. Normalize each batch:
-
-```bash
-node script/normalize-ai-comment-extraction.js \
-  --input output/<project_id>/runs/<task_id>/batches/<batch_id>/ai-comment-extraction.json \
-  --batch output/<project_id>/runs/<task_id>/batches/<batch_id>/comment-dom-batch.json \
-  --task output/<project_id>/runs/<task_id>/task.json \
-  --out output/<project_id>/runs/<task_id>/batches/<batch_id>/normalized-comments.jsonl
-```
-
-7. Merge task batches:
-
-```bash
-python src/pipeline/merge_task_batches.py \
-  --task-dir output/<project_id>/runs/<task_id>
-```
-
-Fallback/debug path:
+Additional fallback/debug tools:
 
 - Use `expand_current_page_comments` only when you need the legacy raw payload for comparison.
 - Use `capture_comment_candidate_batch` or `capture_comment_candidate_batches_until_idle` only when manually controlling capture batches.

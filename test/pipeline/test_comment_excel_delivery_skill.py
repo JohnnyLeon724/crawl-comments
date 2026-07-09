@@ -42,16 +42,50 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
 
         self.assertTrue(re.search(r"display_name:\s*\"Comment Excel Delivery\"", agent_yaml))
 
-    def test_comment_excel_delivery_documents_coordinate_click_mode(self):
+    def test_skill_declares_chrome_as_default_browser_workflow(self):
         skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
 
-        self.assertIn("coordinate", skill)
-        self.assertTrue(
-            "DOM click fallback" in skill
-            or "DOM-click fallback" in skill
-            or "dom-click fallback" in skill
+        for text in [
+            "chrome:control-chrome",
+            "default browser execution surface",
+            "MCP/CDP",
+            "fallback",
+            "comment-dom-batch.json",
+            "ai-comment-extraction.json",
+            "normalized-comments.jsonl",
+        ]:
+            self.assertIn(text, skill + "\n" + workflow)
+
+        self.assertRegex(
+            skill,
+            r"(?is)default browser execution surface.*chrome:control-chrome",
         )
+        self.assertRegex(
+            workflow,
+            r"(?is)Chrome default per-task workflow.*Open a fresh tab",
+        )
+        self.assertRegex(
+            workflow,
+            r"(?is)login.*CAPTCHA.*verification.*user action",
+        )
+
+    def test_mcp_cdp_is_documented_as_fallback_not_default(self):
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        self.assertIn("MCP/CDP fallback", workflow)
+        self.assertIn("expand_and_capture_comment_batches", workflow)
+        self.assertIn("capture_comment_candidate_batch", workflow)
+        self.assertIn("capture_comment_candidate_batches_until_idle", workflow)
+        self.assertNotRegex(
+            workflow,
+            r"Use `expand_and_capture_comment_batches` as the default comment browser step",
+        )
+
+    def test_workflow_keeps_mcp_coordinate_click_details_in_fallback_section(self):
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        self.assertIn("Coordinate clicking remains the MCP fallback production interaction mode", workflow)
         self.assertIn('"clickMode": "coordinate"', workflow)
         self.assertIn('"fallbackClickMode": "dom-click"', workflow)
         self.assertIn('"sourceUrl": "<task.source_url>"', workflow)

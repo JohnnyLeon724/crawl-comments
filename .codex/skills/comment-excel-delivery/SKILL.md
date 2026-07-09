@@ -10,7 +10,8 @@ Use this skill to run the local semi-automated comment delivery pipeline in this
 The split of responsibility is fixed:
 
 - Scripts parse Excel, normalize JSON, merge runs, QA, resume, and generate workbooks.
-- MCP/browser tools expand comments, scroll, and capture bounded DOM candidate batches. The default browser step is `expand_and_capture_comment_batches`, passing each task URL as `sourceUrl`, using coordinate click mode with dom-click fallback.
+- Chrome is the default browser execution surface. Use `chrome:control-chrome` to operate the user's logged-in Chrome session: open a fresh task tab, expand visible comments and replies, scroll, capture bounded DOM candidate batches, and close/finalize the tab after the task.
+- MCP/CDP tools remain fallback/debug paths for reproducing legacy behavior, comparing candidate capture, or continuing when Chrome extension control is unavailable.
 - AI reads DOM candidate batches and produces structured comment JSON that matches the project schema.
 
 Before executing a project, read [references/workflow.md](references/workflow.md). It contains the command order, artifact names, and acceptance checks.
@@ -18,11 +19,12 @@ Before executing a project, read [references/workflow.md](references/workflow.md
 ## Operating Rules
 
 1. Keep every customer project under one output directory such as `output/<project_id>/`.
-2. Keep every target link under `runs/<task_id>/` with `task.json`, `capture-state.json`, `batches/<batch_id>/`, task-level normalized JSONL, and QA artifacts.
-3. Do not ask AI to directly write Excel. Generate Excel through `src/pipeline/build_client_comment_excel.py`.
-4. Use `src/pipeline/resume_comment_project.py` before rerunning a partially completed project; write reruns to the suggested rerun directory.
-5. For historical B站 delivery files, import them with `src/pipeline/import_bilibili_delivery.py` instead of manually mapping columns.
-6. Before claiming completion, run the relevant Python pipeline tests and, when JS/MCP behavior is touched, run the Node tests.
+2. For browser capture, default to `chrome:control-chrome`. Pause for user action when login, CAPTCHA, verification, or platform access checks appear; do not bypass them or substitute another source.
+3. Keep every target link under `runs/<task_id>/` with `task.json`, `capture-state.json`, `batches/<batch_id>/`, task-level normalized JSONL, and QA artifacts.
+4. Do not ask AI to directly write Excel. Generate Excel through `src/pipeline/build_client_comment_excel.py`.
+5. Use `src/pipeline/resume_comment_project.py` before rerunning a partially completed project; write reruns to the suggested rerun directory.
+6. For historical B站 delivery files, import them with `src/pipeline/import_bilibili_delivery.py` instead of manually mapping columns.
+7. Before claiming completion, run the relevant Python pipeline tests and, when JS/MCP behavior is touched, run the Node tests.
 
 ## Expected Outputs
 
@@ -41,4 +43,4 @@ Before executing a project, read [references/workflow.md](references/workflow.md
 - `resume-plan.json` when resuming
 - `delivery.xlsx`
 
-`comment-dom-snapshot.json` and the old expand-then-capture path remain fallback artifacts for small pages or debugging, but the default path is `expand_and_capture_comment_batches`.
+`comment-dom-snapshot.json` and the old MCP/CDP expand-then-capture path remain fallback artifacts for small pages or debugging. The default browser execution surface is `chrome:control-chrome`.
