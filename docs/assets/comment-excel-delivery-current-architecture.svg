@@ -1,0 +1,299 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1680 1040" width="1680" height="1040">
+<style>
+text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', 'Microsoft JhengHei', 'SimHei', sans-serif; }
+.title { font-size: 28px; font-weight: 700; fill: #111827; }
+.subtitle { font-size: 14px; fill: #6b7280; }
+.lane-title { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; }
+.card-title { font-weight: 700; fill: #111827; }
+.card-sub { font-size: 12px; fill: #4b5563; }
+.small { font-size: 12px; fill: #6b7280; }
+.arrow-label { font-size: 12px; font-weight: 700; }
+.note { font-size: 12px; fill: #374151; }
+</style>
+<defs>
+<marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/>
+</marker>
+<marker id="arrow-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#ea580c"/>
+</marker>
+<marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#059669"/>
+</marker>
+<marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#7c3aed"/>
+</marker>
+<marker id="arrow-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+<polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+</marker>
+</defs>
+<rect width="1680" height="1040" fill="#ffffff"/>
+<text x="40" y="48" class="title">评论到 Excel 交付流水线：当前系统架构</text>
+<text x="40" y="76" class="subtitle">Skill 编排主流程；Chrome 负责登录态页面交互；MCP/CDP 作为可复现 fallback；AI 做 DOM 语义结构化；脚本做确定性归一化、QA、复跑和 Excel 生成。</text>
+<rect x="40" y="110" width="330" height="730" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="1.4" stroke-dasharray="8,5"/>
+<text x="58" y="138" class="lane-title" fill="#2563eb">INPUT &amp; ORCHESTRATION</text>
+<rect x="410" y="110" width="420" height="730" rx="12" fill="#fff7ed" stroke="#ea580c" stroke-width="1.4" stroke-dasharray="8,5"/>
+<text x="428" y="138" class="lane-title" fill="#ea580c">BROWSER CAPTURE</text>
+<rect x="870" y="110" width="330" height="730" rx="12" fill="#faf5ff" stroke="#7c3aed" stroke-width="1.4" stroke-dasharray="8,5"/>
+<text x="888" y="138" class="lane-title" fill="#7c3aed">AI STRUCTURING</text>
+<rect x="1240" y="110" width="400" height="730" rx="12" fill="#f0fdf4" stroke="#059669" stroke-width="1.4" stroke-dasharray="8,5"/>
+<text x="1258" y="138" class="lane-title" fill="#059669">DETERMINISTIC DELIVERY</text>
+<line x1="205" y1="250" x2="205" y2="290" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<line x1="205" y1="390" x2="205" y2="430" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<line x1="205" y1="530" x2="205" y2="580" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+<path d="M 330 640 C 365 640, 370 220, 450 220" fill="none" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<rect x="359.0" y="280" width="52" height="22" rx="5" fill="#ffffff" opacity="0.96" stroke="#e5e7eb"/>
+<text x="385" y="295" text-anchor="middle" class="arrow-label" fill="#ea580c">调度采集</text>
+<line x1="615" y1="280" x2="615" y2="330" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<line x1="615" y1="490" x2="615" y2="690" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="655.0" y="589" width="78" height="22" rx="5" fill="#ffffff" opacity="0.96" stroke="#e5e7eb"/>
+<text x="694" y="604" text-anchor="middle" class="arrow-label" fill="#059669">边展开边落盘</text>
+<path d="M 780 594 C 830 594, 832 430, 780 410" fill="none" stroke="#ea580c" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#arrow-orange)"/>
+<rect x="783.0" y="485" width="104" height="22" rx="5" fill="#ffffff" opacity="0.96" stroke="#e5e7eb"/>
+<text x="835" y="500" text-anchor="middle" class="arrow-label" fill="#ea580c">fallback</text>
+<path d="M 780 740 C 830 740, 840 210, 910 210" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<rect x="807.0" y="699" width="78" height="22" rx="5" fill="#ffffff" opacity="0.96" stroke="#e5e7eb"/>
+<text x="846" y="714" text-anchor="middle" class="arrow-label" fill="#2563eb">DOM 批次</text>
+<line x1="1035" y1="260" x2="1035" y2="310" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<line x1="1035" y1="460" x2="1035" y2="510" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<line x1="1035" y1="600" x2="1035" y2="650" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<path d="M 1160 700 C 1200 700, 1210 208, 1280 208" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<rect x="1173.5" y="627" width="65" height="22" rx="5" fill="#ffffff" opacity="0.96" stroke="#e5e7eb"/>
+<text x="1206" y="642" text-anchor="middle" class="arrow-label" fill="#2563eb">JSONL</text>
+<line x1="1440" y1="255" x2="1440" y2="295" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<line x1="1440" y1="390" x2="1440" y2="430" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<line x1="1440" y1="550" x2="1440" y2="590" stroke="#7c3aed" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow-purple)"/>
+<rect x="1468.0" y="563" width="52" height="22" rx="5" fill="#ffffff" opacity="0.96" stroke="#e5e7eb"/>
+<text x="1494" y="578" text-anchor="middle" class="arrow-label" fill="#7c3aed">未通过</text>
+<path d="M 1280 635 C 1165 635, 1185 885, 615 885 C 500 885, 465 735, 450 390" fill="none" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<rect x="816.5" y="887" width="117" height="22" rx="5" fill="#ffffff" opacity="0.96" stroke="#e5e7eb"/>
+<text x="875" y="902" text-anchor="middle" class="arrow-label" fill="#7c3aed">resume 复跑</text>
+<line x1="1440" y1="550" x2="1440" y2="720" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+<rect x="1369.0" y="665" width="52" height="22" rx="5" fill="#ffffff" opacity="0.96" stroke="#e5e7eb"/>
+<text x="1395" y="680" text-anchor="middle" class="arrow-label" fill="#059669">通过</text>
+<rect x="80" y="160" width="250" height="90" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="80" y="160" width="250" height="8" rx="8" fill="#eff6ff"/>
+<circle cx="108" cy="192" r="18" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.2"/>
+<path d="M100,181 L112,181 L118,187 L118,203 L100,203 Z" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.2"/>
+<path d="M112,181 L112,187 L118,187" fill="none" stroke="#bfdbfe" stroke-width="1"/>
+<line x1="104" y1="193" x2="114" y2="193" stroke="#bfdbfe" stroke-width="1"/>
+<line x1="104" y1="198" x2="112" y2="198" stroke="#bfdbfe" stroke-width="1"/>
+<text x="138" y="191" class="card-title" font-size="14">客户需求 Excel</text>
+<text x="138" y="214" class="card-sub">目标链接 / 平台 / 阶段</text>
+<text x="138" y="232" class="card-sub">同列结构可复用测试表</text>
+<rect x="80" y="290" width="250" height="100" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="80" y="290" width="250" height="8" rx="8" fill="#eff6ff"/>
+<circle cx="108" cy="322" r="18" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.2"/>
+<circle cx="108" cy="322" r="8" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.3"/>
+<line x1="108" y1="322" x2="108" y2="308" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="108" y1="322" x2="108" y2="336" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="108" y1="322" x2="94" y2="322" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="108" y1="322" x2="122" y2="322" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="108" y1="322" x2="98" y2="312" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="108" y1="322" x2="118" y2="332" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="108" y1="322" x2="98" y2="332" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="108" y1="322" x2="118" y2="312" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<text x="138" y="321" class="card-title" font-size="14">任务解析脚本</text>
+<text x="138" y="344" class="card-sub">parse_client_requirements.py</text>
+<text x="138" y="362" class="card-sub">import_bilibili_delivery.py</text>
+<rect x="80" y="430" width="250" height="100" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="80" y="430" width="250" height="8" rx="8" fill="#f0fdf4"/>
+<circle cx="108" cy="462" r="18" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.2"/>
+<ellipse cx="108" cy="456" rx="14" ry="5" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+<rect x="94" y="456" width="28" height="18" fill="#ffffff" stroke="none"/>
+<line x1="94" y1="456" x2="94" y2="474" stroke="#bbf7d0" stroke-width="1.2"/>
+<line x1="122" y1="456" x2="122" y2="474" stroke="#bbf7d0" stroke-width="1.2"/>
+<ellipse cx="108" cy="474" rx="14" ry="5" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+<text x="138" y="461" class="card-title" font-size="14">项目任务清单</text>
+<text x="138" y="484" class="card-sub">crawl-tasks.json</text>
+<text x="138" y="502" class="card-sub">runs/&lt;task_id&gt;/task.json</text>
+<rect x="80" y="580" width="250" height="120" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="80" y="580" width="250" height="8" rx="8" fill="#ede9fe"/>
+<circle cx="108" cy="612" r="18" fill="#ede9fe" stroke="#c4b5fd" stroke-width="1.2"/>
+<rect x="96" y="600" width="24" height="24" rx="7" fill="#ffffff" stroke="#c4b5fd" stroke-width="1.3"/>
+<path d="M108,604 L111,611 L117,611 L111,615 L113,621 L108,616 L102,621 L105,614 L99,611 L105,611 Z" fill="#c4b5fd" opacity="0.75"/>
+<text x="138" y="611" class="card-title" font-size="14">Codex Skill 编排</text>
+<text x="138" y="634" class="card-sub">comment-excel-delivery</text>
+<text x="138" y="652" class="card-sub">默认全量完成</text>
+<text x="138" y="670" class="card-sub">completion gate + resume</text>
+<rect x="450" y="160" width="330" height="120" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="450" y="160" width="330" height="8" rx="8" fill="#fff7ed"/>
+<circle cx="478" cy="192" r="18" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.2"/>
+<rect x="465" y="180" width="26" height="23" rx="4" fill="#ffffff" stroke="#fed7aa" stroke-width="1.2"/>
+<rect x="465" y="180" width="26" height="8" rx="4" fill="#fed7aa" opacity="0.45"/>
+<circle cx="471" cy="184" r="1.5" fill="#ef4444"/>
+<circle cx="477" cy="184" r="1.5" fill="#f59e0b"/>
+<text x="508" y="191" class="card-title" font-size="14">Chrome 当前登录态（默认）</text>
+<text x="508" y="214" class="card-sub">fresh task tab</text>
+<text x="508" y="232" class="card-sub">抖音 modal_id -&gt; /video/&lt;id&gt;</text>
+<text x="508" y="250" class="card-sub">登录/验证由用户处理</text>
+<rect x="450" y="330" width="330" height="160" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="450" y="330" width="330" height="8" rx="8" fill="#fff7ed"/>
+<circle cx="478" cy="362" r="18" fill="#fff7ed" stroke="#fed7aa" stroke-width="1.2"/>
+<circle cx="478" cy="362" r="8" fill="#ffffff" stroke="#fed7aa" stroke-width="1.3"/>
+<line x1="478" y1="362" x2="478" y2="348" stroke="#fed7aa" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="362" x2="478" y2="376" stroke="#fed7aa" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="362" x2="464" y2="362" stroke="#fed7aa" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="362" x2="492" y2="362" stroke="#fed7aa" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="362" x2="468" y2="352" stroke="#fed7aa" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="362" x2="488" y2="372" stroke="#fed7aa" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="362" x2="468" y2="372" stroke="#fed7aa" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="362" x2="488" y2="352" stroke="#fed7aa" stroke-width="1" opacity="0.8"/>
+<text x="508" y="361" class="card-title" font-size="14">页面交互循环</text>
+<text x="508" y="384" class="card-sub">展开评论与回复</text>
+<text x="508" y="402" class="card-sub">滚动评论容器，不滚短视频 feed</text>
+<text x="508" y="420" class="card-sub">点击后延迟 / jitter / 等待可配置</text>
+<text x="508" y="438" class="card-sub">tab cleanup 防误触主页</text>
+<rect x="450" y="540" width="330" height="110" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="450" y="540" width="330" height="8" rx="8" fill="#fef2f2"/>
+<circle cx="478" cy="572" r="18" fill="#fef2f2" stroke="#fecaca" stroke-width="1.2"/>
+<circle cx="478" cy="572" r="8" fill="#ffffff" stroke="#fecaca" stroke-width="1.3"/>
+<line x1="478" y1="572" x2="478" y2="558" stroke="#fecaca" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="572" x2="478" y2="586" stroke="#fecaca" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="572" x2="464" y2="572" stroke="#fecaca" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="572" x2="492" y2="572" stroke="#fecaca" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="572" x2="468" y2="562" stroke="#fecaca" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="572" x2="488" y2="582" stroke="#fecaca" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="572" x2="468" y2="582" stroke="#fecaca" stroke-width="1" opacity="0.8"/>
+<line x1="478" y1="572" x2="488" y2="562" stroke="#fecaca" stroke-width="1" opacity="0.8"/>
+<text x="508" y="571" class="card-title" font-size="13">MCP/CDP fallback</text>
+<text x="508" y="594" class="card-sub">comment-crawler-v2</text>
+<text x="508" y="612" class="card-sub">coordinate click + mouse profile</text>
+<text x="508" y="630" class="card-sub">expand_and_capture_comment_batches</text>
+<rect x="450" y="690" width="330" height="100" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="450" y="690" width="330" height="8" rx="8" fill="#f0fdf4"/>
+<circle cx="478" cy="722" r="18" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.2"/>
+<ellipse cx="478" cy="716" rx="14" ry="5" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+<rect x="464" y="716" width="28" height="18" fill="#ffffff" stroke="none"/>
+<line x1="464" y1="716" x2="464" y2="734" stroke="#bbf7d0" stroke-width="1.2"/>
+<line x1="492" y1="716" x2="492" y2="734" stroke="#bbf7d0" stroke-width="1.2"/>
+<ellipse cx="478" cy="734" rx="14" ry="5" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+<text x="508" y="721" class="card-title" font-size="14">批次采集产物</text>
+<text x="508" y="744" class="card-sub">capture-state.json</text>
+<text x="508" y="762" class="card-sub">batches/&lt;batch_id&gt;/comment-dom-batch.json</text>
+<rect x="910" y="160" width="250" height="100" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="910" y="160" width="250" height="8" rx="8" fill="#faf5ff"/>
+<circle cx="938" cy="192" r="18" fill="#faf5ff" stroke="#ddd6fe" stroke-width="1.2"/>
+<path d="M930,181 L942,181 L948,187 L948,203 L930,203 Z" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2"/>
+<path d="M942,181 L942,187 L948,187" fill="none" stroke="#ddd6fe" stroke-width="1"/>
+<line x1="934" y1="193" x2="944" y2="193" stroke="#ddd6fe" stroke-width="1"/>
+<line x1="934" y1="198" x2="942" y2="198" stroke="#ddd6fe" stroke-width="1"/>
+<text x="968" y="191" class="card-title" font-size="14">AI 输入约束</text>
+<text x="968" y="214" class="card-sub">prompt + JSON schema</text>
+<text x="968" y="232" class="card-sub">comment-dom-batch-v1</text>
+<rect x="910" y="310" width="250" height="150" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="910" y="310" width="250" height="8" rx="8" fill="#faf5ff"/>
+<circle cx="938" cy="342" r="18" fill="#faf5ff" stroke="#ddd6fe" stroke-width="1.2"/>
+<rect x="926" y="330" width="24" height="24" rx="7" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.3"/>
+<path d="M938,334 L941,341 L947,341 L941,345 L943,351 L938,346 L932,351 L935,344 L929,341 L935,341 Z" fill="#ddd6fe" opacity="0.75"/>
+<text x="968" y="341" class="card-title" font-size="14">AI 语义结构化</text>
+<text x="968" y="364" class="card-sub">从 DOM 块提取字段</text>
+<text x="968" y="382" class="card-sub">author / content / time / location</text>
+<text x="968" y="400" class="card-sub">reply level / parent / confidence</text>
+<text x="968" y="418" class="card-sub">拒绝页面噪声</text>
+<rect x="910" y="510" width="250" height="90" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="910" y="510" width="250" height="8" rx="8" fill="#faf5ff"/>
+<circle cx="938" cy="542" r="18" fill="#faf5ff" stroke="#ddd6fe" stroke-width="1.2"/>
+<path d="M930,531 L942,531 L948,537 L948,553 L930,553 Z" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2"/>
+<path d="M942,531 L942,537 L948,537" fill="none" stroke="#ddd6fe" stroke-width="1"/>
+<line x1="934" y1="543" x2="944" y2="543" stroke="#ddd6fe" stroke-width="1"/>
+<line x1="934" y1="548" x2="942" y2="548" stroke="#ddd6fe" stroke-width="1"/>
+<text x="968" y="541" class="card-title" font-size="13">结构化 JSON</text>
+<text x="968" y="564" class="card-sub">ai-comment-extraction.json</text>
+<text x="968" y="582" class="card-sub">source_chunk_id = candidate_id</text>
+<rect x="910" y="650" width="250" height="100" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="910" y="650" width="250" height="8" rx="8" fill="#eff6ff"/>
+<circle cx="938" cy="682" r="18" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.2"/>
+<circle cx="938" cy="682" r="8" fill="#ffffff" stroke="#bfdbfe" stroke-width="1.3"/>
+<line x1="938" y1="682" x2="938" y2="668" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="938" y1="682" x2="938" y2="696" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="938" y1="682" x2="924" y2="682" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="938" y1="682" x2="952" y2="682" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="938" y1="682" x2="928" y2="672" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="938" y1="682" x2="948" y2="692" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="938" y1="682" x2="928" y2="692" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<line x1="938" y1="682" x2="948" y2="672" stroke="#bfdbfe" stroke-width="1" opacity="0.8"/>
+<text x="968" y="681" class="card-title" font-size="14">Node 归一化</text>
+<text x="968" y="704" class="card-sub">normalize-ai-comment-extraction.js</text>
+<text x="968" y="722" class="card-sub">normalized-comments.jsonl</text>
+<rect x="1280" y="160" width="320" height="95" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="1280" y="160" width="320" height="8" rx="8" fill="#f0fdf4"/>
+<circle cx="1308" cy="192" r="18" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.2"/>
+<circle cx="1308" cy="192" r="8" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.3"/>
+<line x1="1308" y1="192" x2="1308" y2="178" stroke="#bbf7d0" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="192" x2="1308" y2="206" stroke="#bbf7d0" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="192" x2="1294" y2="192" stroke="#bbf7d0" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="192" x2="1322" y2="192" stroke="#bbf7d0" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="192" x2="1298" y2="182" stroke="#bbf7d0" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="192" x2="1318" y2="202" stroke="#bbf7d0" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="192" x2="1298" y2="202" stroke="#bbf7d0" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="192" x2="1318" y2="182" stroke="#bbf7d0" stroke-width="1" opacity="0.8"/>
+<text x="1338" y="191" class="card-title" font-size="14">任务级合并</text>
+<text x="1338" y="214" class="card-sub">merge_task_batches.py</text>
+<text x="1338" y="232" class="card-sub">runs/&lt;task_id&gt;/normalized-comments.jsonl</text>
+<rect x="1280" y="295" width="320" height="95" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="1280" y="295" width="320" height="8" rx="8" fill="#f0fdf4"/>
+<circle cx="1308" cy="327" r="18" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.2"/>
+<ellipse cx="1308" cy="321" rx="14" ry="5" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+<rect x="1294" y="321" width="28" height="18" fill="#ffffff" stroke="none"/>
+<line x1="1294" y1="321" x2="1294" y2="339" stroke="#bbf7d0" stroke-width="1.2"/>
+<line x1="1322" y1="321" x2="1322" y2="339" stroke="#bbf7d0" stroke-width="1.2"/>
+<ellipse cx="1308" cy="339" rx="14" ry="5" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+<text x="1338" y="326" class="card-title" font-size="14">项目级合并</text>
+<text x="1338" y="349" class="card-sub">merge_comment_runs.py</text>
+<text x="1338" y="367" class="card-sub">all-normalized-comments.jsonl</text>
+<rect x="1280" y="430" width="320" height="120" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="1280" y="430" width="320" height="8" rx="8" fill="#fefce8"/>
+<circle cx="1308" cy="462" r="18" fill="#fefce8" stroke="#fde68a" stroke-width="1.2"/>
+<circle cx="1308" cy="462" r="8" fill="#ffffff" stroke="#fde68a" stroke-width="1.3"/>
+<line x1="1308" y1="462" x2="1308" y2="448" stroke="#fde68a" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="462" x2="1308" y2="476" stroke="#fde68a" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="462" x2="1294" y2="462" stroke="#fde68a" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="462" x2="1322" y2="462" stroke="#fde68a" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="462" x2="1298" y2="452" stroke="#fde68a" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="462" x2="1318" y2="472" stroke="#fde68a" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="462" x2="1298" y2="472" stroke="#fde68a" stroke-width="1" opacity="0.8"/>
+<line x1="1308" y1="462" x2="1318" y2="452" stroke="#fde68a" stroke-width="1" opacity="0.8"/>
+<text x="1338" y="461" class="card-title" font-size="14">QA 与批次汇总</text>
+<text x="1338" y="484" class="card-sub">qa_comment_delivery.py</text>
+<text x="1338" y="502" class="card-sub">build_batch_summary.py</text>
+<text x="1338" y="520" class="card-sub">status / failed / partial / pending</text>
+<rect x="1280" y="590" width="320" height="90" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="1280" y="590" width="320" height="8" rx="8" fill="#faf5ff"/>
+<circle cx="1308" cy="622" r="18" fill="#faf5ff" stroke="#ddd6fe" stroke-width="1.2"/>
+<path d="M1300,611 L1312,611 L1318,617 L1318,633 L1300,633 Z" fill="#ffffff" stroke="#ddd6fe" stroke-width="1.2"/>
+<path d="M1312,611 L1312,617 L1318,617" fill="none" stroke="#ddd6fe" stroke-width="1"/>
+<line x1="1304" y1="623" x2="1314" y2="623" stroke="#ddd6fe" stroke-width="1"/>
+<line x1="1304" y1="628" x2="1312" y2="628" stroke="#ddd6fe" stroke-width="1"/>
+<text x="1338" y="621" class="card-title" font-size="13">安全复跑计划</text>
+<text x="1338" y="644" class="card-sub">resume_comment_project.py</text>
+<text x="1338" y="662" class="card-sub">run / rerun / skip，不覆盖旧结果</text>
+<rect x="1280" y="720" width="320" height="85" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.4"/>
+<rect x="1280" y="720" width="320" height="8" rx="8" fill="#f0fdf4"/>
+<circle cx="1308" cy="752" r="18" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="1.2"/>
+<path d="M1300,741 L1312,741 L1318,747 L1318,763 L1300,763 Z" fill="#ffffff" stroke="#bbf7d0" stroke-width="1.2"/>
+<path d="M1312,741 L1312,747 L1318,747" fill="none" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="1304" y1="753" x2="1314" y2="753" stroke="#bbf7d0" stroke-width="1"/>
+<line x1="1304" y1="758" x2="1312" y2="758" stroke="#bbf7d0" stroke-width="1"/>
+<text x="1338" y="751" class="card-title" font-size="14">交付 Excel</text>
+<text x="1338" y="774" class="card-sub">build_client_comment_excel.py</text>
+<text x="1338" y="792" class="card-sub">delivery.xlsx</text>
+<rect x="1240" y="850" width="400" height="64" rx="8" fill="#f9fafb" stroke="#e5e7eb"/>
+<text x="1260" y="875" class="note" font-weight="700">完成门槛</text>
+<text x="1260" y="896" class="note">qa-summary.status = ok；failed_count = 0；partial_count = 0；</text>
+<text x="1260" y="914" class="note">每个非空 batch 已结构化并归一化。</text>
+<g transform="translate(40, 900)">
+<text x="0" y="0" class="note" font-weight="700">图例</text>
+<line x1="0" y1="28" x2="42" y2="28" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+<text x="54" y="32" class="small">主数据流</text>
+<line x1="0" y1="52" x2="42" y2="52" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-orange)"/>
+<text x="54" y="56" class="small">控制/浏览器动作</text>
+<line x1="0" y1="76" x2="42" y2="76" stroke="#059669" stroke-width="2" marker-end="url(#arrow-green)"/>
+<text x="54" y="80" class="small">文件化产物/通过</text>
+<line x1="0" y1="100" x2="42" y2="100" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)"/>
+<text x="54" y="104" class="small">AI 转换 / QA 复跑</text>
+<line x1="0" y1="124" x2="42" y2="124" stroke="#ea580c" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow-orange)"/>
+<text x="54" y="128" class="small">fallback/debug 路径</text>
+</g>
+<text x="1640" y="1010" text-anchor="end" class="small">Generated from current repo flow · 2026-07-09</text>
+</svg>
