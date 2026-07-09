@@ -6,10 +6,12 @@ For a normal customer requirement workbook, parse tasks:
 
 ```bash
 python src/pipeline/parse_client_requirements.py \
-  --input "docs/米其林评论区分析KOL link-0630.xlsx" \
-  --phase "KOL link-0630" \
+  --input "<client_requirements.xlsx>" \
+  --phase "<phase_name>" \
   --out-dir output/<project_id>
 ```
+
+The client workbook path is not fixed. Use any customer requirement Excel file with the same column layout as the supported requirement template, such as a new test workbook under `docs/` or another local path.
 
 For an existing B站 delivery workbook, import it into the same project shape:
 

@@ -55,6 +55,16 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
         self.assertIn('"clickMode": "coordinate"', workflow)
         self.assertIn('"fallbackClickMode": "dom-click"', workflow)
 
+    def test_workflow_uses_parameterized_client_requirement_workbook(self):
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        self.assertIn("--input \"<client_requirements.xlsx>\"", workflow)
+        self.assertIn("--phase \"<phase_name>\"", workflow)
+        self.assertIn("The client workbook path is not fixed", workflow)
+
+        parse_section = workflow.split("For an existing B站 delivery workbook", 1)[0]
+        self.assertNotIn("docs/米其林评论区分析KOL link-0630.xlsx", parse_section)
+
 
 if __name__ == "__main__":
     unittest.main()
