@@ -70,6 +70,85 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
             r"(?is)login.*CAPTCHA.*verification.*user action",
         )
 
+    def test_workflow_documents_douyin_modal_id_direct_video_handling(self):
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        for text in [
+            "user?...modal_id=...",
+            "modal_id",
+            "/video/<modal_id>",
+            "short-video feed",
+            "comment container",
+        ]:
+            self.assertIn(text, workflow)
+
+        self.assertRegex(
+            workflow,
+            r"(?is)modal_id.*direct.*?/video/<modal_id>",
+        )
+        self.assertRegex(
+            workflow,
+            r"(?is)short-video feed.*scroll.*next video",
+        )
+
+    def test_workflow_documents_closing_accidental_profile_tabs(self):
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        for text in [
+            "tab cleanup guard",
+            "browser.tabs.list",
+            "commenter profile",
+            "creator profile",
+            "close the accidental tab",
+        ]:
+            self.assertIn(text, workflow)
+
+        self.assertRegex(
+            workflow,
+            r"(?is)before.*after.*browser\.tabs\.list",
+        )
+
+    def test_skill_requires_full_delivery_by_default(self):
+        skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+        combined = skill + "\n" + workflow
+
+        for text in [
+            "Default delivery mode is full completion",
+            "Do not treat partial QA as complete",
+            "qa-summary.status == \"ok\"",
+            "failed_count == 0",
+            "partial_count == 0",
+            "resume_comment_project.py",
+        ]:
+            self.assertIn(text, combined)
+
+        self.assertRegex(
+            workflow,
+            r"(?is)Completion gate.*qa-summary\.status == \"ok\".*partial_count == 0",
+        )
+
+    def test_workflow_allows_smoke_mode_only_when_explicit(self):
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        for text in [
+            "Smoke or sampling mode is allowed only when the user explicitly asks for it",
+            "test artifact, not a complete delivery",
+            "Do not use smoke limits in default delivery mode",
+        ]:
+            self.assertIn(text, workflow)
+
+    def test_workflow_documents_elastic_capture_parameters(self):
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+
+        for text in [
+            "Capture parameters are elastic",
+            "expected_comment_count",
+            "increase maxBatches, maxRounds, and maxRuntimeMs",
+            "Reduce parameters only for explicit smoke mode",
+        ]:
+            self.assertIn(text, workflow)
+
     def test_mcp_cdp_is_documented_as_fallback_not_default(self):
         workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
 

@@ -20,11 +20,15 @@ Before executing a project, read [references/workflow.md](references/workflow.md
 
 1. Keep every customer project under one output directory such as `output/<project_id>/`.
 2. For browser capture, default to `chrome:control-chrome`. Pause for user action when login, CAPTCHA, verification, or platform access checks appear; do not bypass them or substitute another source.
-3. Keep every target link under `runs/<task_id>/` with `task.json`, `capture-state.json`, `batches/<batch_id>/`, task-level normalized JSONL, and QA artifacts.
-4. Do not ask AI to directly write Excel. Generate Excel through `src/pipeline/build_client_comment_excel.py`.
-5. Use `src/pipeline/resume_comment_project.py` before rerunning a partially completed project; write reruns to the suggested rerun directory.
-6. For historical B站 delivery files, import them with `src/pipeline/import_bilibili_delivery.py` instead of manually mapping columns.
-7. Before claiming completion, run the relevant Python pipeline tests and, when JS/MCP behavior is touched, run the Node tests.
+3. For Douyin `user?...modal_id=...` links, extract `modal_id` and open `/video/<modal_id>` as the task target so scrolling stays in the detail comment container instead of the short-video feed.
+4. After expand or comment-area clicks, close accidental Chrome tabs such as commenter profile or creator profile pages before continuing the task.
+5. Default delivery mode is full completion. Unless the user explicitly asks for smoke, sample, test-only, a specific task subset, or a fixed batch limit, continue browser capture, AI extraction, normalization, merge, QA, and resume loops until every task passes the completion gate.
+6. Do not treat partial QA as complete. If `qa-summary.status` is not `ok`, run `src/pipeline/resume_comment_project.py`, rerun the suggested task actions with elastic capture parameters, and rebuild QA before generating a final delivery.
+7. Keep every target link under `runs/<task_id>/` with `task.json`, `capture-state.json`, `batches/<batch_id>/`, task-level normalized JSONL, and QA artifacts.
+8. Do not ask AI to directly write Excel. Generate Excel through `src/pipeline/build_client_comment_excel.py` only after the completion gate is satisfied, unless the user explicitly requested a smoke/test artifact.
+9. Use `src/pipeline/resume_comment_project.py` before rerunning a partially completed project; write reruns to the suggested rerun directory.
+10. For historical B站 delivery files, import them with `src/pipeline/import_bilibili_delivery.py` instead of manually mapping columns.
+11. Before claiming completion, run the relevant Python pipeline tests and, when JS/MCP behavior is touched, run the Node tests.
 
 ## Expected Outputs
 

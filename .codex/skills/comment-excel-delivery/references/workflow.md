@@ -21,7 +21,39 @@ python src/pipeline/import_bilibili_delivery.py \
   --out-dir output/<project_id>
 ```
 
-## 2. Run One Task
+## 2. Delivery Mode And Completion Gate
+
+Default delivery mode is full completion. Do not use smoke limits in default delivery mode, and do not stop the project just because one browser pass reached `maxBatches`, `maxRounds`, or `maxRuntimeMs`.
+
+Smoke or sampling mode is allowed only when the user explicitly asks for it with words such as smoke, test, sample, only task X, or only N batches. In that case, generated files are a test artifact, not a complete delivery, and the final response must label them that way.
+
+Completion gate for a formal `delivery.xlsx`:
+
+- `qa-summary.status == "ok"`.
+- `failed_count == 0`.
+- `partial_count == 0`.
+- Every task has task-level `normalized-comments.jsonl`.
+- Every non-empty batch has `ai-comment-extraction.json` and `normalized-comments.jsonl`.
+
+Do not treat partial QA as complete. After every QA run that is not `ok`, run:
+
+```bash
+python src/pipeline/resume_comment_project.py \
+  --project-dir output/<project_id> \
+  --out output/<project_id>/resume-plan.json
+```
+
+Then execute the suggested `run` or `rerun` actions, rebuild task merges, rebuild project merge, rerun QA, and repeat until the completion gate passes or a real blocker requires user action.
+
+Capture parameters are elastic. Choose the initial browser-capture budget from `expected_comment_count`, platform behavior, observed candidates per batch, and remaining QA gaps:
+
+- For small tasks, start with moderate limits and stop only after reliable idle/end-of-comments signals.
+- For large tasks or QA gaps, increase maxBatches, maxRounds, and maxRuntimeMs before rerunning.
+- Increase `maxIdleRounds` when a platform loads comments slowly or batches alternate between empty and non-empty.
+- Increase `maxCandidates` or reduce `maxCharsPerCandidate` only when batches are truncating or too dense for AI extraction.
+- Reduce parameters only for explicit smoke mode.
+
+## 3. Run One Task
 
 For each `runs/<task_id>/task.json`, use `chrome:control-chrome` as the default browser execution surface.
 
@@ -29,9 +61,15 @@ For each `runs/<task_id>/task.json`, use `chrome:control-chrome` as the default 
 
 1. Connect to Chrome through the Chrome skill and use the user's logged-in Chrome session.
 2. Open a fresh tab for `task.source_url`; do not manually reuse an old content tab as the task target.
-3. Confirm the current page is the intended Douyin or Xiaohongshu target. If login, CAPTCHA, verification, privacy consent, or platform access checks appear, pause for user action and ask the user to handle them. Do not bypass the check or replace the platform page with another source.
-4. Use Chrome automation to click visible expand controls such as comments, replies, "展开更多", or "展开 N 条回复". Prefer bounded, repeated rounds over one large page scrape.
-5. In each round, capture the current visible comment candidate DOM before scrolling. Save non-empty batches using the existing schema and paths:
+3. Before navigation, normalize Douyin user modal links. When `task.source_url` has the shape `user?...modal_id=...`, extract `modal_id` and directly open `https://www.douyin.com/video/<modal_id>` or the equivalent `/video/<modal_id>` detail URL. Do not run the task inside the Douyin short-video feed, because scrolling the short-video feed can switch to the next video. After the detail page opens, scroll only the comment container or platform detail pane.
+4. Confirm the current page is the intended Douyin or Xiaohongshu target. If login, CAPTCHA, verification, privacy consent, or platform access checks appear, pause for user action and ask the user to handle them. Do not bypass the check or replace the platform page with another source.
+5. Use Chrome automation to click visible expand controls such as comments, replies, "展开更多", or "展开 N 条回复". Prefer bounded, repeated rounds over one large page scrape.
+6. Add a tab cleanup guard around risky clicks:
+   - Record the task tab id and a before snapshot with `browser.tabs.list()` before clicking expand controls or comment-area elements.
+   - After each click batch, call `browser.tabs.list()` again and compare before and after.
+   - If a new tab opened to a commenter profile, creator profile, `/user/` page, or any URL that is not the task detail URL, close the accidental tab and continue from the task tab.
+   - If the task tab itself navigated away from the intended detail page, go back or reopen the normalized task URL before capturing.
+7. In each round, capture the current visible comment candidate DOM before scrolling. Save non-empty batches using the existing schema and paths:
 
 ```text
 output/<project_id>/runs/<task_id>/
@@ -39,12 +77,12 @@ output/<project_id>/runs/<task_id>/
   batches/<batch_id>/comment-dom-batch.json
 ```
 
-6. Each `comment-dom-batch.json` must stay compatible with `comment-dom-batch-v1` and include `candidate_id`, `candidate_hash`, `dom_path`, `role_hint`, `inner_text`, `html`, `nearby_buttons`, `rect`, and `captured_at` for candidates when available.
-7. Update `capture-state.json` with `last_batch_id`, `next_batch_id`, seen candidate hashes, round counts, candidate totals, and stop reason.
-8. Stop after idle, navigation away, user-required verification, or configured runtime/batch limits. Close or finalize the task tab before moving to the next task.
-9. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
-10. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
-11. Normalize each batch:
+8. Each `comment-dom-batch.json` must stay compatible with `comment-dom-batch-v1` and include `candidate_id`, `candidate_hash`, `dom_path`, `role_hint`, `inner_text`, `html`, `nearby_buttons`, `rect`, and `captured_at` for candidates when available.
+9. Update `capture-state.json` with `last_batch_id`, `next_batch_id`, seen candidate hashes, round counts, candidate totals, and stop reason.
+10. Stop after idle, navigation away, user-required verification, or configured runtime/batch limits. Close or finalize the task tab before moving to the next task.
+11. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
+12. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
+13. Normalize each batch:
 
 ```bash
 node script/normalize-ai-comment-extraction.js \
@@ -54,7 +92,7 @@ node script/normalize-ai-comment-extraction.js \
   --out output/<project_id>/runs/<task_id>/batches/<batch_id>/normalized-comments.jsonl
 ```
 
-12. Merge task batches:
+14. Merge task batches:
 
 ```bash
 python src/pipeline/merge_task_batches.py \
@@ -102,7 +140,7 @@ Additional fallback/debug tools:
 - Use `capture_comment_candidate_batch` or `capture_comment_candidate_batches_until_idle` only when manually controlling capture batches.
 - Use `comment-dom-snapshot.json` and `prompts/comment-dom-extraction.md` only as a small-page fallback or debug path.
 
-## 3. Merge, QA, And Build Excel
+## 4. Merge, QA, And Build Excel
 
 Merge all normalized task outputs:
 
@@ -128,7 +166,7 @@ python src/pipeline/build_batch_summary.py \
   --out output/<project_id>/batch-summary.json
 ```
 
-Generate the client workbook:
+Generate the client workbook only after the completion gate passes. If the user explicitly requested smoke or sampling mode, you may generate the workbook as a test artifact, not a complete delivery:
 
 ```bash
 python src/pipeline/build_client_comment_excel.py \
@@ -137,7 +175,7 @@ python src/pipeline/build_client_comment_excel.py \
   --out output/<project_id>/delivery.xlsx
 ```
 
-## 4. Resume Safely
+## 5. Resume Safely
 
 Before rerunning any incomplete project:
 
@@ -153,7 +191,7 @@ Use `action`:
 - `run`: use the canonical `runs/<task_id>` directory.
 - `rerun`: write to `runs/<task_id>/reruns/<resume_id>` to avoid overwriting previous work.
 
-## 5. Verification
+## 6. Verification
 
 Run Python pipeline tests:
 
