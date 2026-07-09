@@ -9,11 +9,12 @@ Chrome is the default browser execution surface for comment capture. Use `chrome
 The default flow is:
 
 1. Parse task links into `output/<project_id>/crawl-tasks.json`.
-2. Use `chrome:control-chrome` to open each `task.source_url` in a fresh tab.
-3. Let Codex automate visible comment expansion, reply expansion, scrolling, and DOM inspection through Chrome.
-4. Stop for user action when login, CAPTCHA, verification, privacy consent, or platform access checks appear. Do not bypass those checks.
-5. Save visible DOM candidates as `comment-dom-batch-v1` files under the existing batch paths.
-6. Run AI extraction, normalization, task merge, project merge, QA, and Excel generation with the existing commands.
+2. Normalize Douyin `user?...modal_id=...` links to `/video/<modal_id>` before opening the task.
+3. Use `chrome:control-chrome` to open each normalized task URL in a fresh tab.
+4. Let Codex automate visible comment expansion, reply expansion, scrolling, and DOM inspection through Chrome.
+5. Stop for user action when login, CAPTCHA, verification, privacy consent, or platform access checks appear. Do not bypass those checks.
+6. Save visible DOM candidates as `comment-dom-batch-v1` files under the existing batch paths.
+7. Run AI extraction, normalization, task merge, project merge, QA, and Excel generation with the existing commands.
 
 ## 2. Chrome per-task sequence
 
@@ -27,15 +28,34 @@ output/<project_id>/runs/<task_id>/
 Run the browser part in a fresh Chrome tab:
 
 1. Connect to Chrome using the `chrome:control-chrome` skill.
-2. Open a new tab and navigate to `task.source_url`.
+2. If a Douyin URL has the form `user?...modal_id=...`, extract `modal_id` and navigate to `/video/<modal_id>` instead of the user page.
 3. Confirm that the current page is the intended Douyin or Xiaohongshu page.
 4. If login, CAPTCHA, verification, or consent UI appears, pause and ask the user to complete it in Chrome.
 5. Click visible expand controls such as `展开更多`, `展开 N 条回复`, comments, or replies.
 6. Capture the current visible comment candidate DOM before scrolling.
-7. Scroll the comment area and repeat bounded rounds until idle, navigation away, verification, or configured limits.
-8. Close or finalize the task tab before moving to the next task.
+7. Scroll the comment area or detail pane, not the Douyin short-video feed. Scrolling the short-video feed can switch to the next video.
+8. Use a tab cleanup guard around expand and comment-area clicks. Compare `browser.tabs.list()` before and after each click batch; if a commenter profile, creator profile, `/user/` page, or other non-task page opens, close the accidental tab and return to the task tab.
+9. Repeat bounded rounds until idle, navigation away, verification, or configured limits.
+10. Close or finalize the task tab before moving to the next task.
 
-## 3. Chrome DOM batch shape
+## 3. Douyin modal links and tab cleanup
+
+Douyin user profile URLs can carry the actual video id in `modal_id`, for example `user?...modal_id=...`. Treat these as detail-video tasks:
+
+1. Parse `modal_id` from the URL.
+2. Build `/video/<modal_id>` as the navigation target.
+3. Confirm the opened title and URL match the intended video.
+4. Scroll only the comment container on the detail page. Do not scroll the short-video feed.
+
+Some comment UIs open user pages when an avatar, username, commenter profile, or creator profile is clicked accidentally. Add a tab cleanup guard:
+
+1. Keep the task tab id.
+2. Call `browser.tabs.list()` before risky clicks.
+3. Call `browser.tabs.list()` after the click batch.
+4. For any newly opened tab that is not the task detail page, close the accidental tab.
+5. If the task tab navigated to a profile page, reopen the normalized task URL before capture.
+
+## 4. Chrome DOM batch shape
 
 Chrome capture must write the same artifacts consumed by the existing pipeline:
 
@@ -86,13 +106,14 @@ Each `comment-dom-batch.json` must use `comment-dom-batch-v1` and preserve candi
 
 Do not create Chrome-specific artifact names such as `chrome-dom-batch.json`.
 
-## 4. Chrome control example
+## 5. Chrome control example
 
 The exact Chrome API is provided by the `chrome:control-chrome` skill. A production run must read that skill first. The browser client exposes Playwright-compatible page access through `tab.playwright`; use that surface to inspect, click, scroll, and extract bounded DOM candidates.
 
 ```javascript
 const tab = await browser.tabs.new();
-await tab.goto(task.source_url);
+const targetUrl = normalizeDouyinModalUrl(task.source_url);
+await tab.goto(targetUrl);
 
 const page = tab.playwright;
 await page.waitForLoadState('domcontentloaded');
@@ -103,11 +124,14 @@ if (/登录|验证码|CAPTCHA|验证|隐私|同意/.test(blockedText)) {
 }
 
 for (const label of ['展开更多', '展开回复', '查看更多回复']) {
+  const beforeTabs = await browser.tabs.list();
   const buttons = await page.getByText(label, { exact: false }).all();
   for (const button of buttons.slice(0, 3)) {
     await button.click({ timeout: 1500 }).catch(() => {});
     await page.waitForTimeout(900);
   }
+  const afterTabs = await browser.tabs.list();
+  await closeAccidentalProfileTabs(beforeTabs, afterTabs, tab);
 }
 
 const candidates = await page.locator('[data-e2e*="comment"], [class*="comment"], [class*="reply"]').evaluateAll(nodes =>
@@ -127,13 +151,13 @@ const candidates = await page.locator('[data-e2e*="comment"], [class*="comment"]
   }).filter(item => item.inner_text)
 );
 
-await page.mouse.wheel(0, Math.round(await page.evaluate(() => window.innerHeight * 0.75)));
+await scrollCommentContainerOnly(page);
 await page.waitForTimeout(1200);
 ```
 
 This example demonstrates the expected Chrome control pattern. The saved file still must be a valid `comment-dom-batch-v1` batch with stable candidate hashes and capture state.
 
-## 5. AI extraction and normalization
+## 6. AI extraction and normalization
 
 For each batch, read:
 
@@ -169,7 +193,7 @@ python src/pipeline/merge_task_batches.py \
 
 Project merge, QA, batch summary, and Excel generation remain the same commands used by `comment-excel-delivery`.
 
-## 6. MCP/CDP fallback
+## 7. MCP/CDP fallback
 
 MCP/CDP fallback remains available for legacy reproduction, MCP debugging, or runs where Chrome extension control is unavailable. It is not the default browser execution surface.
 
@@ -212,21 +236,24 @@ Fallback main call:
 
 Do not bypass login, CAPTCHA, verification, or platform access checks in fallback mode. Stop and ask for user action.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Likely Cause | Action |
 |---|---|---|
 | Chrome control cannot find a usable tab | No fresh tab was opened for the task | Open a new task tab through `chrome:control-chrome` and navigate to `task.source_url` |
+| Douyin task opens the short-video feed | Source URL was `user?...modal_id=...` | Extract `modal_id`, reopen `/video/<modal_id>`, and scroll the comment container |
+| A profile tab opens while expanding comments | Avatar, username, commenter profile, or creator profile was clicked | Use the tab cleanup guard and close the accidental tab |
 | Captured candidates are login or consent text | The platform blocked the page behind login, CAPTCHA, verification, or consent UI | Pause for user action in Chrome, then continue the same task |
 | Downstream normalizer fails | Batch is not compatible with `comment-dom-batch-v1` | Check candidate fields and do not use `chrome-dom-batch.json` |
 | MCP fallback attaches to the wrong page | Old CDP tab remained selected | Use `sourceUrl` when calling fallback tools and keep `closePageAfter` enabled on final capture |
 | Project merge misses a task | Task-level `normalized-comments.jsonl` was not written | Run `merge_task_batches.py` after all batch normalizations |
 
-## 8. Safety boundary
+## 9. Safety boundary
 
 - Do not read cookies, passwords, or account secrets.
 - Do not bypass platform risk controls, login, CAPTCHA, verification, or consent UI.
 - Do not scrape from unrelated substitute sources.
 - Do not run multiple platform pages in parallel for one task.
+- Do not leave accidental profile tabs open after a task click.
 - Do not write results outside the project `output/` directory.
 - AI only processes saved DOM batches and never operates page clicks, scrolling, or authentication.

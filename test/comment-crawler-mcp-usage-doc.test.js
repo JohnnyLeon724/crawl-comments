@@ -47,3 +47,22 @@ test('usage documentation keeps MCP as fallback and blocks verification bypasses
     assert.match(doc, new RegExp(requiredText));
   }
 });
+
+test('usage documentation covers Douyin modal_id and accidental tab cleanup', () => {
+  const doc = fs.readFileSync(docPath, 'utf8');
+
+  for (const requiredText of [
+    'user?...modal_id=...',
+    'modal_id',
+    '/video/<modal_id>',
+    'short-video feed',
+    'comment container',
+    'tab cleanup guard',
+    'browser.tabs.list',
+    'commenter profile',
+    'creator profile',
+    'close the accidental tab'
+  ]) {
+    assert.ok(doc.includes(requiredText), `missing text: ${requiredText}`);
+  }
+});
