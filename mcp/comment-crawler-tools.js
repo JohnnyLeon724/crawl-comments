@@ -633,6 +633,7 @@ function listTools() {
             type: 'array',
             items: { type: 'string' }
           },
+          navigationAwayUrl: { type: 'string' },
           idleRounds: { type: 'number' },
           lastBatchId: { type: 'string' },
           nextBatchId: { type: 'string' },
@@ -687,6 +688,25 @@ function getPageUrl(page) {
   } catch (_error) {
     return '';
   }
+}
+
+function normalizeUrlIdentity(url) {
+  const value = String(url || '').trim();
+  if (!value) return '';
+
+  try {
+    const parsed = new URL(value);
+    return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
+  } catch (_error) {
+    return value.split(/[?#]/)[0].replace(/\/+$/, '');
+  }
+}
+
+function isNavigationAwayFromSource(sourceUrl, currentUrl) {
+  const sourceIdentity = normalizeUrlIdentity(sourceUrl);
+  const currentIdentity = normalizeUrlIdentity(currentUrl);
+  if (!sourceIdentity || !currentIdentity) return false;
+  return sourceIdentity !== currentIdentity;
 }
 
 function detectPlatformSafe(url) {
@@ -989,12 +1009,25 @@ function buildExpandTargetScript() {
       if (!el || typeof el.querySelectorAll !== 'function') return false;
       return Array.from(el.querySelectorAll('*')).some(child => child !== el && isVisible(child) && isExpandText(child.textContent));
     };
+    const isProfileLink = el => {
+      let current = el;
+      while (current && current.nodeType === 1) {
+        const tagName = String(current.tagName || '').toLowerCase();
+        const href = String(current.getAttribute && current.getAttribute('href') || '');
+        if (tagName === 'a' && /(?:^|\/)(?:user|profile|space)(?:\/|$)|space\.bilibili\.com|\/share\/user\//i.test(href)) {
+          return true;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    };
     const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
     const targets = [];
 
     for (const el of Array.from(document.querySelectorAll('button,[role="button"],a,span,div'))) {
       if (targets.length >= config.maxClicksPerRound) break;
       if (!isVisible(el)) continue;
+      if (isProfileLink(el)) continue;
       const text = normalizeText(el.textContent);
       if (!isExpandText(text)) continue;
       if (hasMatchingDescendant(el)) continue;
@@ -1029,6 +1062,118 @@ function buildExpandTargetScript() {
 
     return targets;
   };
+}
+
+function buildClickTargetValidationScript() {
+  return config => {
+    const normalizeText = value => String(value == null ? '' : value).replace(/\s+/g, '').trim();
+    const expandPatterns = [
+      /^展开更多(?:回复|评论)?$/,
+      /^展开(?:全部)?\d+条?回复$/,
+      /^展开\d+回复$/,
+      /^查看(?:全部|更多)?\d+条?回复$/,
+      /^查看(?:全部|更多)?回复$/,
+      /^查看更多回复$/,
+      /^更多回复$/
+    ];
+    const rejectPatterns = [
+      /展开全文/,
+      /收起/,
+      /商品/,
+      /详情/
+    ];
+    const isExpandText = value => {
+      const text = normalizeText(value);
+      if (!text || text.length > 24) return false;
+      if (rejectPatterns.some(pattern => pattern.test(text))) return false;
+      return expandPatterns.some(pattern => pattern.test(text));
+    };
+    const isVisible = el => {
+      if (!el) return false;
+      if (el.disabled) return false;
+      if (String(el.getAttribute && el.getAttribute('aria-disabled')) === 'true') return false;
+      if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0) return false;
+      const rect = typeof el.getBoundingClientRect === 'function'
+        ? el.getBoundingClientRect()
+        : null;
+      if (rect && (rect.width <= 0 || rect.height <= 0)) return false;
+      const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+      if (style && (
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        style.pointerEvents === 'none' ||
+        Number(style.opacity) === 0
+      )) {
+        return false;
+      }
+      return true;
+    };
+    const isProfileLink = el => {
+      let current = el;
+      while (current && current.nodeType === 1) {
+        const tagName = String(current.tagName || '').toLowerCase();
+        const href = String(current.getAttribute && current.getAttribute('href') || '');
+        if (tagName === 'a' && /(?:^|\/)(?:user|profile|space)(?:\/|$)|space\.bilibili\.com|\/share\/user\//i.test(href)) {
+          return true;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    };
+
+    const x = Number(config && config.x);
+    const y = Number(config && config.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return { ok: false, reason: 'invalid-click-point' };
+    }
+
+    const start = document.elementFromPoint
+      ? document.elementFromPoint(x, y)
+      : null;
+    if (!start) {
+      return { ok: false, reason: 'no-element-at-point' };
+    }
+    if (isProfileLink(start)) {
+      return { ok: false, reason: 'unsafe-profile-link' };
+    }
+
+    const expectedText = normalizeText(config && config.text);
+    let current = start;
+    let depth = 0;
+    while (current && current.nodeType === 1 && depth < 6) {
+      if (isProfileLink(current)) {
+        return { ok: false, reason: 'unsafe-profile-link' };
+      }
+      const text = normalizeText(current.textContent);
+      if (isVisible(current) && isExpandText(text)) {
+        if (
+          expectedText &&
+          text !== expectedText &&
+          !text.includes(expectedText) &&
+          !expectedText.includes(text)
+        ) {
+          return { ok: false, reason: 'expand-text-mismatch' };
+        }
+        return { ok: true, text };
+      }
+      current = current.parentElement;
+      depth += 1;
+    }
+
+    return { ok: false, reason: 'no-expand-control-at-point' };
+  };
+}
+
+async function validateExpandClickTarget(page, target, point) {
+  if (!page || typeof page.evaluate !== 'function') {
+    return { ok: true };
+  }
+
+  return page.evaluate(buildClickTargetValidationScript(), {
+    x: Number(point && point.x),
+    y: Number(point && point.y),
+    text: target && target.text || ''
+  });
 }
 
 async function findVisibleExpandTargets(page, options = {}) {
@@ -1074,6 +1219,10 @@ async function clickExpandTargets(page, targets = [], options = {}) {
       const point = target.click_point || target.center;
       if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) {
         throw new Error('target click point unavailable');
+      }
+      const validation = await validateExpandClickTarget(page, target, point);
+      if (!validation || validation.ok !== true) {
+        throw new Error(validation && validation.reason ? validation.reason : 'unsafe-click-target');
       }
       const steps = pickRangeValue(click.mouseMoveSteps, random);
       await page.mouse.move(Number(point.x), Number(point.y), { steps });
@@ -1144,11 +1293,24 @@ async function domClickExpandTargets(page, _targets = [], options = {}) {
       if (!el || typeof el.querySelectorAll !== 'function') return false;
       return Array.from(el.querySelectorAll('*')).some(child => child !== el && isVisible(child) && isExpandText(child.textContent));
     };
+    const isProfileLink = el => {
+      let current = el;
+      while (current && current.nodeType === 1) {
+        const tagName = String(current.tagName || '').toLowerCase();
+        const href = String(current.getAttribute && current.getAttribute('href') || '');
+        if (tagName === 'a' && /(?:^|\/)(?:user|profile|space)(?:\/|$)|space\.bilibili\.com|\/share\/user\//i.test(href)) {
+          return true;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    };
     const candidates = [];
 
     for (const el of Array.from(document.querySelectorAll('button,[role="button"],a,span,div'))) {
       if (candidates.length >= config.maxClicksPerRound) break;
       if (!isVisible(el)) continue;
+      if (isProfileLink(el)) continue;
       if (!isExpandText(el.textContent)) continue;
       if (hasMatchingDescendant(el)) continue;
       candidates.push(el);
@@ -1770,6 +1932,7 @@ async function expandAndCaptureCommentBatches(args = {}, context = {}) {
     let lastBatchId = String(previousState.last_batch_id || '');
     let nextBatchId = resolveBatchId({}, previousState);
     let stopReason = '';
+    let navigationAwayUrl = '';
 
     fs.mkdirSync(outDir, { recursive: true });
 
@@ -1806,6 +1969,35 @@ async function expandAndCaptureCommentBatches(args = {}, context = {}) {
       }
 
       await wait(pickRangeValue(config.expandWaitMs, random));
+
+      const currentPageUrl = getPageUrl(page);
+      if (isNavigationAwayFromSource(sourceUrl, currentPageUrl)) {
+        stopReason = 'navigation-away';
+        navigationAwayUrl = currentPageUrl;
+        previousState = decorateCaptureState(previousState, {
+          taskId,
+          platform,
+          sourceUrl,
+          lastBatchId,
+          nextBatchId,
+          roundCount,
+          totalClicks,
+          candidateCount,
+          idleRounds,
+          stopReason,
+          totalErrors
+        });
+        previousState.total_errors = totalErrors;
+        previousState.click_mode = config.click.clickMode;
+        previousState.coordinate_click_count = coordinateClickCount;
+        previousState.dom_click_count = domClickCount;
+        previousState.fallback_click_count = fallbackClickCount;
+        previousState.last_click_errors = lastClickErrors;
+        previousState.navigation_away_url = navigationAwayUrl;
+        fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+        output.writeJson(stateFile, previousState);
+        break;
+      }
 
       const batchId = resolveBatchId({}, previousState);
       const batchDir = path.join(outDir, 'batches', batchId);
@@ -1909,6 +2101,7 @@ async function expandAndCaptureCommentBatches(args = {}, context = {}) {
       domClickCount,
       fallbackClickCount,
       lastClickErrors,
+      navigationAwayUrl,
       idleRounds,
       lastBatchId,
       nextBatchId,

@@ -495,7 +495,13 @@ test('findVisibleExpandTargets returns innermost visible expand controls with bo
         visible: false,
         rect: { left: 10, top: 120, width: 100, height: 20, bottom: 140 }
       });
-      const elements = [parent, child, rejected, hidden];
+      const profileLink = makeElement({
+        tagName: 'A',
+        text: '展开9条回复',
+        rect: { left: 10, top: 160, width: 100, height: 20, bottom: 180 },
+        attrs: { href: 'https://www.douyin.com/user/MS4wLjABAAAA' }
+      });
+      const elements = [parent, child, rejected, hidden, profileLink];
       global.window = {
         innerHeight: 800,
         getComputedStyle: () => ({ display: 'block', visibility: 'visible', pointerEvents: 'auto', opacity: '1' })
@@ -568,6 +574,40 @@ test('clickExpandTargets uses page.mouse with configured movement and hold timin
     ['up']
   ]);
   assert.deepEqual(sleeps, [60, 700, 60, 700]);
+});
+
+test('clickExpandTargets skips unsafe coordinate points that resolve to profile links', async () => {
+  const tools = require(toolsPath);
+  const calls = [];
+  const page = {
+    evaluate: async () => ({
+      ok: false,
+      reason: 'unsafe-profile-link'
+    }),
+    mouse: {
+      move: async (x, y, options) => calls.push(['move', x, y, options.steps]),
+      down: async () => calls.push(['down']),
+      up: async () => calls.push(['up'])
+    }
+  };
+
+  const result = await tools.clickExpandTargets(page, [
+    { text: '展开5条回复', click_point: { x: 100, y: 200 } }
+  ], {
+    click: tools.normalizeClickProfile({
+      mouseMoveStepsMin: 4,
+      mouseMoveStepsMax: 4,
+      clickDownMsMin: 60,
+      clickDownMsMax: 60
+    }),
+    sleep: async () => {},
+    random: () => 0
+  });
+
+  assert.equal(result.clicked, 0);
+  assert.equal(result.errors, 1);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(result.last_click_errors, ['unsafe-profile-link']);
 });
 
 test('expandVisibleCommentsOnce falls back to DOM click when coordinate input is unavailable', async () => {
@@ -1281,6 +1321,81 @@ test('expand_and_capture_comment_batches captures before scrolling and stops on 
     ['pageClose', false],
     ['sessionClose']
   ]);
+});
+
+test('expand_and_capture_comment_batches stops before capture after navigation away from source page', async () => {
+  const tools = require(toolsPath);
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-mcp-project-'));
+  const outDir = path.join(projectRoot, 'output', 'task_0002');
+  const calls = [];
+  let currentUrl = 'https://www.douyin.com/video/123';
+  const page = {
+    url: () => currentUrl,
+    close: async options => calls.push(['pageClose', options.runBeforeUnload])
+  };
+
+  const result = await tools.callTool('expand_and_capture_comment_batches', {
+    sourceUrl: 'https://www.douyin.com/video/123',
+    outDir,
+    taskId: 'task_0002',
+    maxRounds: 3,
+    maxBatches: 5,
+    maxIdleRounds: 2,
+    maxClicksPerRound: 3,
+    expandWaitMsMin: 1,
+    expandWaitMsMax: 1,
+    scrollWaitMsMin: 1,
+    scrollWaitMsMax: 1,
+    closePageAfter: false
+  }, {
+    connectToCdp: async options => {
+      calls.push(['connect', options.sourceUrl]);
+      return {
+        page,
+        close: async () => calls.push(['sessionClose'])
+      };
+    },
+    expandVisibleCommentsOnce: async () => {
+      calls.push(['expand']);
+      currentUrl = 'https://www.douyin.com/user/MS4wLjABAAAA';
+      return {
+        clicked: 1,
+        errors: 0,
+        click_mode: 'coordinate',
+        fallback_used: false,
+        coordinate_click_count: 1,
+        dom_click_count: 0,
+        fallback_click_count: 0,
+        last_click_errors: []
+      };
+    },
+    captureCommentCandidateBatch: async () => {
+      throw new Error('capture should not run after navigation-away');
+    },
+    scrollCommentContainer: async () => {
+      throw new Error('scroll should not run after navigation-away');
+    },
+    sleep: async ms => calls.push(['sleep', ms]),
+    projectRoot
+  });
+
+  assert.equal(result.isError, false);
+  assert.equal(result.structuredContent.stopReason, 'navigation-away');
+  assert.equal(result.structuredContent.roundCount, 1);
+  assert.equal(result.structuredContent.batchCount, 0);
+  assert.equal(result.structuredContent.candidateCount, 0);
+  assert.equal(result.structuredContent.totalClicks, 1);
+  assert.equal(result.structuredContent.navigationAwayUrl, 'https://www.douyin.com/user/MS4wLjABAAAA');
+  assert.deepEqual(calls, [
+    ['connect', 'https://www.douyin.com/video/123'],
+    ['expand'],
+    ['sleep', 1],
+    ['sessionClose']
+  ]);
+
+  const state = JSON.parse(fs.readFileSync(path.join(outDir, 'capture-state.json'), 'utf8'));
+  assert.equal(state.stop_reason, 'navigation-away');
+  assert.equal(state.navigation_away_url, 'https://www.douyin.com/user/MS4wLjABAAAA');
 });
 
 test('capture_comment_candidate_batches_until_idle writes batches until consecutive empty batches', async () => {
