@@ -25,11 +25,12 @@ python src/pipeline/import_bilibili_delivery.py \
 
 For each `runs/<task_id>/task.json`:
 
-1. Open the task URL in the logged-in browser.
-2. Use `expand_and_capture_comment_batches` as the default comment browser step. It expands visible replies, captures DOM candidates before scrolling, saves bounded batches, and stops after idle or configured limits:
+1. Keep Chrome running with CDP enabled and the target platform logged in. Do not manually reuse an old content tab as the task target.
+2. Use `expand_and_capture_comment_batches` as the default comment browser step. Pass the task URL as `sourceUrl`; the MCP tool opens a fresh task page, expands visible replies, captures DOM candidates before scrolling, saves bounded batches, and stops after idle, navigation-away, or configured limits:
 
 ```text
 {
+  "sourceUrl": "<task.source_url>",
   "outDir": "output/<project_id>/runs/<task_id>",
   "taskId": "<task_id>",
   "maxRuntimeMs": 1800000,
@@ -50,11 +51,13 @@ For each `runs/<task_id>/task.json`:
   "clickDownMsMax": 160,
   "clickGapMsMin": 300,
   "clickGapMsMax": 900,
+  "postClickWaitMsMin": 800,
+  "postClickWaitMsMax": 1600,
   "closePageAfter": true
 }
 ```
 
-Coordinate clicking is used for production interaction compatibility. If coordinate input is unavailable, the MCP tool falls back to `dom-click`; login, CAPTCHA, or verification pages should stop the run for user action.
+Coordinate clicking is used for production interaction compatibility. The tool validates the click point before pressing, skips obvious user/profile links, and stops with `navigation-away` if a click still leaves the source page. If coordinate input is unavailable, the MCP tool falls back to `dom-click`; login, CAPTCHA, or verification pages should stop the run for user action.
 
 3. Use `capture-state.json` to confirm the generated batch range. The tool writes `batches/<batch_id>/comment-dom-batch.json` for non-empty batches.
 4. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.

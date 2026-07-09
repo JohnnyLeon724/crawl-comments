@@ -54,6 +54,9 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
         )
         self.assertIn('"clickMode": "coordinate"', workflow)
         self.assertIn('"fallbackClickMode": "dom-click"', workflow)
+        self.assertIn('"sourceUrl": "<task.source_url>"', workflow)
+        self.assertIn('"postClickWaitMsMin": 800', workflow)
+        self.assertIn('"postClickWaitMsMax": 1600', workflow)
 
     def test_workflow_uses_parameterized_client_requirement_workbook(self):
         workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
