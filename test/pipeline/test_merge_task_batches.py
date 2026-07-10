@@ -67,6 +67,25 @@ class MergeTaskBatchesTest(unittest.TestCase):
             self.assertEqual(summary["row_count"], 0)
             self.assertEqual((task_dir / "normalized-comments.jsonl").read_text(encoding="utf-8"), "")
 
+    def test_dedupes_matching_evidence_row_keys_from_model_batches(self):
+        from merge_task_batches import merge_task_batch_comments, write_task_batch_merge
+
+        with TemporaryDirectory() as tmp:
+            task_dir = Path(tmp) / "runs" / "task_0001"
+            self.write_jsonl(task_dir / "batches" / "model_002" / "normalized-comments.jsonl", [
+                {"row_key": "weibo-evidence-row", "comment_id": "c-100", "text": "后写入的重复评论"},
+            ])
+            self.write_jsonl(task_dir / "batches" / "model_001" / "normalized-comments.jsonl", [
+                {"row_key": "weibo-evidence-row", "comment_id": "c-100", "text": "证据评论"},
+            ])
+
+            rows = merge_task_batch_comments(task_dir)
+            summary = write_task_batch_merge(task_dir)
+
+            self.assertEqual(rows, [{"row_key": "weibo-evidence-row", "comment_id": "c-100", "text": "证据评论"}])
+            self.assertEqual(summary["duplicate_count"], 1)
+            self.assertEqual(summary["row_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

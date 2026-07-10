@@ -31,7 +31,8 @@ test('core crawler modules are grouped under src with legacy wrappers', () => {
     ['src/normalize/run-comment-ai-extraction.js', 'script/run-comment-ai-extraction.js', '../src/normalize/run-comment-ai-extraction.js'],
     ['src/normalize/run-comment-ai-review.js', 'script/run-comment-ai-review.js', '../src/normalize/run-comment-ai-review.js'],
     ['src/adapters/douyin.js', 'adapters/douyin.js', '../src/adapters/douyin.js'],
-    ['src/adapters/xiaohongshu.js', 'adapters/xiaohongshu.js', '../src/adapters/xiaohongshu.js']
+    ['src/adapters/xiaohongshu.js', 'adapters/xiaohongshu.js', '../src/adapters/xiaohongshu.js'],
+    ['src/adapters/weibo.js', 'adapters/weibo.js', '../src/adapters/weibo.js']
   ];
 
   for (const [sourcePath, legacyPath, requirePath] of pairs) {

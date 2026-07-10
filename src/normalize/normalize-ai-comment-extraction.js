@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const douyin = require('../adapters/douyin.js');
 const xiaohongshu = require('../adapters/xiaohongshu.js');
+const weibo = require('../adapters/weibo.js');
 
 function printUsage() {
   console.log(`
@@ -22,7 +23,7 @@ function printUsage() {
   --batch       可选，DOM candidate batch JSON；与 --snapshot 二选一
   --task        可选，客户任务上下文 JSON；使用 --run-dir 时默认读取 task.json
   --out         可选，normalized-comments.jsonl 输出路径；未使用 --run-dir 时必填
-  --platform    可选，douyin 或 xiaohongshu；未传时读取 AI 输出 platform
+  --platform    可选，douyin、xiaohongshu 或 weibo；未传时读取 AI 输出 platform
   --source-url  可选，源 URL；未传时读取 AI 输出 source_url
   --help        查看帮助
 `.trim());
@@ -141,6 +142,7 @@ function buildRowKey(parts) {
 function extractPostId(platform, sourceUrl) {
   if (platform === 'douyin') return douyin.extractDouyinPostId(sourceUrl);
   if (platform === 'xiaohongshu') return xiaohongshu.extractXiaohongshuNoteId(sourceUrl);
+  if (platform === 'weibo') return weibo.extractWeiboPostId(sourceUrl);
   return '';
 }
 
@@ -181,6 +183,18 @@ function normalizeTaskContext(task) {
   };
 }
 
+function hasCompleteCompositeEvidence(sourceChunk) {
+  if (!sourceChunk || typeof sourceChunk !== 'object') return false;
+  return Boolean(
+    normalizeSpaces(sourceChunk.source_author_uid_href) &&
+    normalizeSpaces(sourceChunk.source_comment_text) &&
+    normalizeSpaces(sourceChunk.source_comment_timestamp) &&
+    Object.prototype.hasOwnProperty.call(sourceChunk, 'source_reply_context') &&
+    normalizeSpaces(sourceChunk.source_root_context) &&
+    normalizeSpaces(sourceChunk.source_composite_fingerprint)
+  );
+}
+
 function normalizeAiRow(row, options) {
   const text = normalizeSpaces(row && row.text);
   if (!text) return null;
@@ -190,18 +204,28 @@ function normalizeAiRow(row, options) {
   const rowType = row.row_type === 'level2' ? 'level2' : 'level1';
   const userName = normalizeSpaces(row.user_name);
   const sourceChunkId = normalizeSpaces(row.source_chunk_id);
-  const keyParts = [
-    platform,
-    sourceUrl,
-    rowType,
-    sourceChunkId,
-    userName,
-    text
-  ];
   const sourceBatchId = normalizeSpaces(options.sourceBatchId);
-  if (sourceBatchId) keyParts.push(sourceBatchId);
-  const rowKey = buildRowKey(keyParts);
   const sourceChunk = options.chunkMap.get(sourceChunkId) || null;
+  const identityMode = normalizeSpaces(sourceChunk?.identity_mode);
+  const isComposite = identityMode === 'composite_fingerprint';
+  const commentId = isComposite ? '' : normalizeSpaces(sourceChunk?.source_comment_id);
+  const sourceCompositeFingerprint = commentId
+    ? ''
+    : normalizeSpaces(sourceChunk?.source_composite_fingerprint);
+
+  if (platform === 'weibo' && (!sourceChunk || (!commentId && !hasCompleteCompositeEvidence(sourceChunk)))) {
+    return null;
+  }
+
+  const rowKey = commentId
+    ? buildRowKey([platform, sourceUrl, commentId])
+    : sourceCompositeFingerprint
+      ? buildRowKey([platform, sourceUrl, sourceCompositeFingerprint])
+      : buildRowKey([platform, sourceUrl, rowType, sourceChunkId, sourceBatchId]);
+  const isDomIdCandidate = Boolean(commentId);
+  const rootCommentId = isDomIdCandidate
+    ? (normalizeSpaces(sourceChunk?.source_root_comment_id) || (rowType === 'level1' ? commentId : ''))
+    : '';
   const taskContext = normalizeTaskContext(options.task);
   const rawTask = options.task && typeof options.task === 'object'
     ? Object.assign({}, options.task)
@@ -221,9 +245,9 @@ function normalizeAiRow(row, options) {
     source_url: sourceUrl,
     post_id: extractPostId(platform, sourceUrl),
     row_type: rowType,
-    comment_id: '',
-    root_comment_id: rowType === 'level1' ? rowKey : '',
-    parent_comment_id: '',
+    comment_id: isDomIdCandidate ? commentId : '',
+    root_comment_id: rootCommentId || (platform === 'weibo' ? '' : (rowType === 'level1' ? rowKey : '')),
+    parent_comment_id: isDomIdCandidate ? normalizeSpaces(sourceChunk?.source_parent_comment_id) : '',
     user_name: userName,
     text,
     created_at: normalizeSpaces(row.created_at),
@@ -345,6 +369,7 @@ module.exports = {
   extractPostId,
   buildChunkMap,
   getSnapshotBatchId,
+  hasCompleteCompositeEvidence,
   normalizeAiRow,
   normalizeAiExtraction,
   rowsToJsonl,

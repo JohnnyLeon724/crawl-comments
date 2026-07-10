@@ -187,6 +187,143 @@ test('normalizes AI rows against comment DOM batch candidates', () => {
   assert.notEqual(firstBatchRows[0].row_key, secondBatchRows[0].row_key);
 });
 
+test('uses DOM-ID candidate evidence for Weibo post and comment identities', () => {
+  const extraction = {
+    platform: 'weibo',
+    source_url: 'https://weibo.com/1812511057/Pa1Bc2D3e',
+    rows: [{
+      source_chunk_id: 'weibo:c-100',
+      row_type: 'level1',
+      user_name: '用户A',
+      text: '评论',
+      created_at: '',
+      ip_location: '',
+      like_count: 0,
+      reply_to_user_name: '',
+      root_text: '',
+      is_pinned: false,
+      is_author: false,
+      confidence: 'high',
+      evidence: ''
+    }]
+  };
+  const snapshot = {
+    schema_version: 'comment-dom-batch-v1',
+    batch_id: 'model_001',
+    candidates: [{
+      candidate_id: 'weibo:c-100',
+      identity_mode: 'dom_id',
+      source_comment_id: 'c-100',
+      source_parent_comment_id: '',
+      source_root_comment_id: 'c-100',
+      source_capture_batch_ids: ['capture_hot_001', 'capture_time_001']
+    }]
+  };
+
+  const rows = normalizer.normalizeAiExtraction(extraction, { snapshot });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].comment_id, 'c-100');
+  assert.equal(rows[0].parent_comment_id, '');
+  assert.equal(rows[0].root_comment_id, 'c-100');
+  assert.equal(rows[0].post_id, '1812511057/Pa1Bc2D3e');
+  assert.equal(
+    rows[0].row_key,
+    normalizer.buildRowKey(['weibo', extraction.source_url, 'c-100'])
+  );
+});
+
+test('keeps composite candidate identities out of canonical IDs', () => {
+  const extraction = {
+    platform: 'weibo',
+    source_url: 'https://www.weibo.com/detail/Pa1Bc2D3e',
+    rows: [{
+      source_chunk_id: 'weibo:fp:example',
+      row_type: 'level2',
+      user_name: '用户B',
+      text: '回复内容',
+      created_at: '',
+      ip_location: '',
+      like_count: 0,
+      reply_to_user_name: '用户A',
+      root_text: '原评论',
+      is_pinned: false,
+      is_author: false,
+      confidence: 'high',
+      evidence: ''
+    }]
+  };
+  const candidate = {
+    candidate_id: 'weibo:fp:example',
+    identity_mode: 'composite_fingerprint',
+    source_author_uid_href: '/u/200',
+    source_comment_text: '回复内容',
+    source_comment_timestamp: '7月10日',
+    source_reply_context: '回复 用户A',
+    source_root_context: '原评论',
+    source_composite_fingerprint: 'sha256:example',
+    source_capture_batch_ids: ['capture_hot_001', 'capture_time_001']
+  };
+
+  const rows = normalizer.normalizeAiExtraction(extraction, {
+    snapshot: {
+      schema_version: 'comment-dom-batch-v1',
+      batch_id: 'model_001',
+      candidates: [candidate]
+    }
+  });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].comment_id, '');
+  assert.equal(rows[0].parent_comment_id, '');
+  assert.equal(rows[0].root_comment_id, '');
+  assert.equal(
+    rows[0].row_key,
+    normalizer.buildRowKey(['weibo', extraction.source_url, 'sha256:example'])
+  );
+  assert.equal(rows[0].raw.source_chunk.identity_mode, 'composite_fingerprint');
+  assert.equal(rows[0].raw.source_chunk.source_author_uid_href, '/u/200');
+  assert.equal(rows[0].raw.source_chunk.source_composite_fingerprint, 'sha256:example');
+});
+
+test('rejects Weibo AI rows without matching or complete candidate identity evidence', () => {
+  const extraction = {
+    platform: 'weibo',
+    source_url: 'https://weibo.com/1812511057/Pa1Bc2D3e',
+    rows: [{
+      source_chunk_id: 'weibo:missing',
+      row_type: 'level1',
+      user_name: '用户C',
+      text: '不能写入',
+      created_at: '',
+      like_count: 0
+    }, {
+      source_chunk_id: 'weibo:incomplete-fingerprint',
+      row_type: 'level1',
+      user_name: '用户D',
+      text: '证据不完整',
+      created_at: '',
+      like_count: 0
+    }]
+  };
+  const snapshot = {
+    schema_version: 'comment-dom-batch-v1',
+    batch_id: 'model_001',
+    candidates: [{
+      candidate_id: 'weibo:incomplete-fingerprint',
+      identity_mode: 'composite_fingerprint',
+      source_author_uid_href: '/u/300',
+      source_comment_text: '证据不完整',
+      source_comment_timestamp: '7月10日',
+      source_reply_context: '',
+      source_root_context: '',
+      source_composite_fingerprint: 'sha256:incomplete'
+    }]
+  };
+
+  assert.deepEqual(normalizer.normalizeAiExtraction(extraction, { snapshot }), []);
+});
+
 test('normalizes an AI extraction file and writes JSONL output', () => {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'comment-ai-normalize-'));
   const extractionPath = path.join(runDir, 'ai-comment-extraction.json');
