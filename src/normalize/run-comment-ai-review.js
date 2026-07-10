@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { writeModelOutputSchema } = require('./model-output-schema.js');
+const { createModelOutputSchema } = require('./model-output-schema.js');
 
 const DEFAULT_CODEX_BIN = [
   '/Applications/Codex.app/Contents/Resources/codex',
@@ -101,6 +101,26 @@ function readManifest(inputDir) {
   return JSON.parse(fs.readFileSync(path.join(inputDir, 'manifest.json'), 'utf8'));
 }
 
+function createReviewModelOutputSchema(canonicalSchema) {
+  return {
+    $schema: canonicalSchema.$schema,
+    title: 'Comment AI Review Model Output',
+    type: 'object',
+    additionalProperties: false,
+    required: ['results'],
+    properties: {
+      results: createModelOutputSchema(canonicalSchema)
+    }
+  };
+}
+
+function writeReviewModelOutputSchema(canonicalPath, outputPath) {
+  const canonicalSchema = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
+  const modelSchema = createReviewModelOutputSchema(canonicalSchema);
+  fs.writeFileSync(outputPath, `${JSON.stringify(modelSchema, null, 2)}\n`);
+  return modelSchema;
+}
+
 function buildCodexExecCommand(options) {
   return {
     command: options.codexBin,
@@ -168,9 +188,19 @@ function readJsonArray(filePath) {
   }
 }
 
+function readReviewOutputRows(filePath) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (Array.isArray(parsed)) return parsed;
+    return Array.isArray(parsed?.results) ? parsed.results : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
 function isCompleteReviewOutput(batch) {
   const inputRows = readJsonArray(batch.rows_file);
-  const outputRows = readJsonArray(batch.output_file);
+  const outputRows = readReviewOutputRows(batch.output_file);
   if (!inputRows || !outputRows) return false;
 
   const expectedKeys = inputRows.map(row => String(row?.row_key || ''));
@@ -187,7 +217,7 @@ function isCompleteReviewOutput(batch) {
 function runReviewBatches(args) {
   const manifest = readManifest(args.inputDir);
   const modelSchemaPath = path.join(args.inputDir, 'model-output-schema.json');
-  writeModelOutputSchema(args.schemaPath, modelSchemaPath);
+  writeReviewModelOutputSchema(args.schemaPath, modelSchemaPath);
   const modelOptions = Object.assign({}, args, { schemaPath: modelSchemaPath });
   const results = manifest.batches.map(batch => {
     if (args.resume && isCompleteReviewOutput(batch)) {
@@ -245,8 +275,11 @@ module.exports = {
   DEFAULT_CODEX_BIN,
   parseArgs,
   readManifest,
+  createReviewModelOutputSchema,
+  writeReviewModelOutputSchema,
   buildCodexExecCommand,
   runOneBatch,
+  readReviewOutputRows,
   isCompleteReviewOutput,
   runReviewBatches,
   main

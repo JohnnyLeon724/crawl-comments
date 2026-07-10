@@ -148,7 +148,7 @@ function buildPrompt(rows) {
     '4. 不要用单个关键词机械判断。',
     '5. sentiment 只能是：负面、正面、中性。',
     '6. negative_theme 只在 sentiment=负面 时填写，否则填空字符串。',
-    '7. 输出必须严格符合 JSON schema，是一个 JSON 数组，不要输出 Markdown。',
+    '7. 输出必须严格符合 JSON schema，根对象 {"results":[...]}，不要输出 Markdown。',
     '',
     'JSON schema 字段：row_key, sentiment, negative_theme, reason, confidence。',
     '',

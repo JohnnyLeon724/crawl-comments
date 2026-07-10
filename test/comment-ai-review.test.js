@@ -117,6 +117,7 @@ test('records the character ceiling and keeps reply context in review prompts', 
   assert.match(prompt, /历史导入没有微博正文/);
   assert.match(prompt, /root_text/);
   assert.match(prompt, /reply_to_user_name/);
+  assert.match(prompt, /根对象\s*\{\"results\":\[\.\.\.\]\}/);
 });
 
 test('builds Codex CLI command arguments for a review batch', () => {
@@ -165,6 +166,13 @@ test('uses a generated strict schema for model review commands', () => {
   assert.equal(fs.existsSync(strictSchemaPath), true);
   assert.equal(result.modelSchemaPath, strictSchemaPath);
   assert.equal(result.results[0].command.args.includes(strictSchemaPath), true);
+
+  const modelSchema = JSON.parse(fs.readFileSync(strictSchemaPath, 'utf8'));
+  assert.equal(modelSchema.type, 'object');
+  assert.deepEqual(modelSchema.required, ['results']);
+  assert.equal(modelSchema.additionalProperties, false);
+  assert.equal(modelSchema.properties.results.type, 'array');
+  assert.equal(modelSchema.properties.results.items.additionalProperties, false);
 });
 
 test('resume mode skips only a complete review output', () => {
@@ -177,6 +185,9 @@ test('resume mode skips only a complete review output', () => {
   fs.writeFileSync(rowsFile, JSON.stringify([{ row_key: 'a' }]));
   fs.writeFileSync(promptFile, 'review');
   fs.writeFileSync(outputFile, JSON.stringify([{ row_key: 'a' }]));
+  assert.equal(runner.isCompleteReviewOutput(batch), true);
+
+  fs.writeFileSync(outputFile, JSON.stringify({ results: [{ row_key: 'a' }] }));
   assert.equal(runner.isCompleteReviewOutput(batch), true);
 
   fs.writeFileSync(outputFile, JSON.stringify([{ row_key: 'a' }, { row_key: 'a' }]));

@@ -79,8 +79,9 @@ function readJsonl(filePath) {
 
 function readJsonArray(filePath) {
   const value = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  if (!Array.isArray(value)) throw new Error(`审阅输出必须是 JSON 数组：${filePath}`);
-  return value;
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.results)) return value.results;
+  throw new Error(`审阅输出必须是 JSON 数组或包含 results 数组的对象：${filePath}`);
 }
 
 function resolvePath(baseDir, value) {
@@ -97,6 +98,7 @@ function readReviewRows(inputPath) {
     : resolved;
   const parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed?.results)) return parsed.results;
   if (!Array.isArray(parsed.batches)) {
     throw new Error(`审阅输入不是 JSON 数组或 manifest：${inputPath}`);
   }

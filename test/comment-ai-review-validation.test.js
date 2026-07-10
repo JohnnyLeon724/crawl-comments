@@ -104,3 +104,15 @@ test('reads manifest review outputs written as cwd-relative paths', () => {
     process.chdir(originalCwd);
   }
 });
+
+test('reads object-wrapped review output from a manifest', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-object-output-'));
+  const manifestPath = path.join(dir, 'manifest.json');
+  const reviewPath = path.join(dir, 'review_001.json');
+  fs.writeFileSync(reviewPath, JSON.stringify({ results: reviewRows() }));
+  fs.writeFileSync(manifestPath, JSON.stringify({
+    batches: [{ output_file: reviewPath }]
+  }));
+
+  assert.deepEqual(readReviewRows(manifestPath), reviewRows());
+});
