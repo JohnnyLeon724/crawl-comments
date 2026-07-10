@@ -11,6 +11,70 @@ from qa_comment_delivery import build_qa_summary  # noqa: E402
 
 
 class QaCommentDeliveryTest(unittest.TestCase):
+    def write_weibo_project(self, project_dir, rows, streams, declared_comment_count, expected_comment_count):
+        (project_dir / "crawl-tasks.json").write_text(
+            json.dumps(
+                {
+                    "tasks": [
+                        {
+                            "task_id": "task_0001",
+                            "phase": "KOL",
+                            "platform": "weibo",
+                            "expected_comment_count": expected_comment_count,
+                        },
+                    ]
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        (project_dir / "all-normalized-comments.jsonl").write_text(
+            "".join(f"{json.dumps(row, ensure_ascii=False)}\n" for row in rows),
+            encoding="utf-8",
+        )
+        state_path = project_dir / "runs" / "task_0001" / "capture-state.json"
+        state_path.parent.mkdir(parents=True)
+        state_path.write_text(
+            json.dumps(
+                {
+                    "declared_comment_count": declared_comment_count,
+                    "captured_record_count": len(rows),
+                    "streams": streams,
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def weibo_level1_row(self, index, identity_mode, comment_id=""):
+        return {
+            "task_id": "task_0001",
+            "row_type": "level1",
+            "user_name": f"用户{index}",
+            "text": f"评论{index}",
+            "created_at": "3月前",
+            "ip_location": "江苏",
+            "comment_id": comment_id,
+            "raw": {"source_chunk": {"identity_mode": identity_mode}},
+        }
+
+    def complete_weibo_streams(self, unique_level1_count):
+        return {
+            "hot": {
+                "verified": True,
+                "stop_reason": "page_end",
+                "remaining_expand_count": 0,
+                "unique_level1_count": unique_level1_count,
+            },
+            "time": {
+                "verified": True,
+                "stop_reason": "page_end",
+                "remaining_expand_count": 0,
+                "unique_level1_count": unique_level1_count,
+            },
+        }
+
     def test_builds_task_level_qa_summary(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             project_dir = Path(tmpdir)
@@ -287,6 +351,67 @@ class QaCommentDeliveryTest(unittest.TestCase):
 
             self.assertEqual(task["missing_ai_extraction_batch_count"], 1)
             self.assertIn("missing_ai_extraction_batch", task["issues"])
+
+    def test_marks_a_weibo_task_partial_when_the_time_stream_is_incomplete(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            streams = self.complete_weibo_streams(1)
+            streams["time"] = {
+                "verified": True,
+                "stop_reason": "no_progress",
+                "remaining_expand_count": 0,
+                "unique_level1_count": 1,
+            }
+            self.write_weibo_project(
+                project_dir,
+                [self.weibo_level1_row(1, "dom_id", "comment-1")],
+                streams,
+                declared_comment_count=1,
+                expected_comment_count=1,
+            )
+
+            task = build_qa_summary(project_dir)["tasks"][0]
+
+            self.assertEqual(task["status"], "partial")
+            self.assertIn("weibo_time_stream_incomplete", task["issues"])
+            self.assertTrue(task["weibo_hot_stream_complete"])
+            self.assertFalse(task["weibo_time_stream_complete"])
+
+    def test_allows_weibo_ok_only_with_complete_dom_id_stream_coverage(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            self.write_weibo_project(
+                project_dir,
+                [self.weibo_level1_row(index, "dom_id", f"comment-{index}") for index in range(1, 9)],
+                self.complete_weibo_streams(8),
+                declared_comment_count=10,
+                expected_comment_count=8,
+            )
+
+            task = build_qa_summary(project_dir)["tasks"][0]
+
+            self.assertEqual(task["status"], "ok")
+            self.assertEqual(task["weibo_level1_coverage"], 0.8)
+            self.assertTrue(task["weibo_dual_sort_complete"])
+            self.assertNotIn("weibo_level1_coverage_below_threshold", task["issues"])
+
+    def test_keeps_complete_composite_only_weibo_capture_partial(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            self.write_weibo_project(
+                project_dir,
+                [self.weibo_level1_row(1, "composite_fingerprint")],
+                self.complete_weibo_streams(1),
+                declared_comment_count=1,
+                expected_comment_count=1,
+            )
+
+            task = build_qa_summary(project_dir)["tasks"][0]
+
+            self.assertEqual(task["status"], "partial")
+            self.assertIn("weibo_composite_identity_only", task["issues"])
+            self.assertFalse(task["weibo_dual_sort_complete"])
+            self.assertNotIn("双排序全量完成", task["notes"])
 
     def test_reports_rendered_count_gap_without_turning_a_passing_task_partial(self):
         with tempfile.TemporaryDirectory() as tmpdir:

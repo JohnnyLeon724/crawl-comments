@@ -106,6 +106,78 @@ class ResumeCommentProjectTest(unittest.TestCase):
             self.assertEqual(task["action"], "rerun")
             self.assertIn("batches/", task["existing_files"])
 
+    def test_reprobes_dom_identity_for_a_complete_composite_only_weibo_task(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_url = "https://weibo.com/detail/123"
+            profile_path = "output/weibo-profile-probe/weibo-comment-profile.json"
+            self.write_json(project_dir / "crawl-tasks.json", {
+                "tasks": [{
+                    "task_id": "task_0001",
+                    "platform": "weibo",
+                    "source_url": source_url,
+                }]
+            })
+            self.write_json(project_dir / "qa-summary.json", {
+                "tasks": [{
+                    "task_id": "task_0001",
+                    "status": "partial",
+                    "issues": ["weibo_composite_identity_only"],
+                    "notes": "复合指纹身份",
+                }]
+            })
+            self.write_json(project_dir / "runs" / "task_0001" / "capture-state.json", {
+                "profile_path": profile_path,
+                "streams": {
+                    "hot": {"verified": True, "stop_reason": "page_end", "remaining_expand_count": 0},
+                    "time": {"verified": True, "stop_reason": "page_end", "remaining_expand_count": 0},
+                },
+            })
+
+            task = build_resume_plan(project_dir, resume_id="resume_test")["tasks"][0]
+
+            self.assertEqual(task["action"], "reprobe_weibo_dom_identity")
+            self.assertEqual(task["source_url"], source_url)
+            self.assertEqual(task["profile_path"], profile_path)
+            self.assertNotIn("api", json.dumps(task).lower())
+            self.assertNotIn("mcp", json.dumps(task).lower())
+
+    def test_resumes_only_the_incomplete_weibo_time_stream(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            source_url = "https://weibo.com/detail/456"
+            profile_path = "output/weibo-profile-probe/weibo-comment-profile.json"
+            self.write_json(project_dir / "crawl-tasks.json", {
+                "tasks": [{
+                    "task_id": "task_0001",
+                    "platform": "weibo",
+                    "source_url": source_url,
+                }]
+            })
+            self.write_json(project_dir / "qa-summary.json", {
+                "tasks": [{
+                    "task_id": "task_0001",
+                    "status": "partial",
+                    "issues": ["weibo_time_stream_incomplete"],
+                    "notes": "按时间未完成",
+                }]
+            })
+            self.write_json(project_dir / "runs" / "task_0001" / "capture-state.json", {
+                "profile_path": profile_path,
+                "streams": {
+                    "hot": {"verified": True, "stop_reason": "page_end", "remaining_expand_count": 0},
+                    "time": {"verified": True, "stop_reason": "no_progress", "remaining_expand_count": 0},
+                },
+            })
+
+            plan = build_resume_plan(project_dir, resume_id="resume_test")
+            matching = [task for task in plan["tasks"] if task["task_id"] == "task_0001"]
+
+            self.assertEqual(len(matching), 1)
+            self.assertEqual(matching[0]["action"], "resume_weibo_time_stream")
+            self.assertEqual(matching[0]["source_url"], source_url)
+            self.assertEqual(matching[0]["profile_path"], profile_path)
+
 
 if __name__ == "__main__":
     unittest.main()

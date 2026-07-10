@@ -41,6 +41,36 @@ def read_qa_by_task(project_dir: Path) -> dict[str, dict[str, Any]]:
     }
 
 
+def read_capture_state(run_dir: Path) -> dict[str, Any]:
+    return read_json(run_dir / "capture-state.json")
+
+
+def is_weibo_stream_complete(stream: Any) -> bool:
+    if not isinstance(stream, dict):
+        return False
+    return (
+        bool(stream.get("verified"))
+        and str(stream.get("stop_reason") or "") == "page_end"
+        and int(stream.get("remaining_expand_count") or 0) == 0
+    )
+
+
+def incomplete_weibo_streams(capture_state: dict[str, Any]) -> list[str]:
+    streams = capture_state.get("streams") if isinstance(capture_state.get("streams"), dict) else {}
+    if not streams:
+        return []
+    return [name for name in ("hot", "time") if not is_weibo_stream_complete(streams.get(name))]
+
+
+def previous_weibo_profile_path(task: dict[str, Any], capture_state: dict[str, Any]) -> str:
+    for source in (capture_state, task):
+        for field in ("profile_path", "weibo_profile_path", "comment_profile_path"):
+            value = str(source.get(field) or "").strip()
+            if value:
+                return value
+    return ""
+
+
 def existing_run_files(run_dir: Path) -> list[str]:
     if not run_dir.exists():
         return []
@@ -82,7 +112,7 @@ def decide_action(status: str, files: list[str]) -> str:
 
 def suggested_out_dir(task_id: str, action: str, resume_id: str) -> str:
     base = f"runs/{task_id}"
-    if action == "rerun":
+    if action not in {"run", "skip"}:
         return f"{base}/reruns/{resume_id}"
     return base
 
@@ -94,8 +124,19 @@ def build_task_plan(task: dict[str, Any], project_dir: Path, qa_by_task: dict[st
     qa = qa_by_task.get(task_id, {})
     status = infer_status(qa, run_dir, files)
     action = decide_action(status, files)
+    capture_state = read_capture_state(run_dir)
+    profile_path = ""
 
-    return {
+    if task.get("platform") == "weibo" and status != "ok":
+        incomplete_streams = incomplete_weibo_streams(capture_state)
+        if incomplete_streams:
+            action = f"resume_weibo_{incomplete_streams[0]}_stream"
+        elif "weibo_composite_identity_only" in (qa.get("issues") or []):
+            action = "reprobe_weibo_dom_identity"
+        if action.startswith("resume_weibo_") or action == "reprobe_weibo_dom_identity":
+            profile_path = previous_weibo_profile_path(task, capture_state)
+
+    plan = {
         "task_id": task_id,
         "platform": task.get("platform", ""),
         "status": status,
@@ -105,13 +146,17 @@ def build_task_plan(task: dict[str, Any], project_dir: Path, qa_by_task: dict[st
         "suggested_out_dir": suggested_out_dir(task_id, action, resume_id),
         "existing_files": files,
     }
+    if action.startswith("resume_weibo_") or action == "reprobe_weibo_dom_identity":
+        plan["profile_path"] = profile_path
+        plan["source_url"] = str(task.get("source_url") or "")
+    return plan
 
 
 def summarize_actions(tasks: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "skip_count": len([task for task in tasks if task["action"] == "skip"]),
         "run_count": len([task for task in tasks if task["action"] == "run"]),
-        "rerun_count": len([task for task in tasks if task["action"] == "rerun"]),
+        "rerun_count": len([task for task in tasks if task["action"] not in {"skip", "run"}]),
     }
 
 
