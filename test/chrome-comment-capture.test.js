@@ -145,3 +145,143 @@ test('builds a reproducible capture state and DOM batch with count-gap observati
   assert.equal(batch.state.declared_comment_count, 216);
   assert.equal(batch.candidates[0].candidate_id, candidate.candidate_id);
 });
+
+test('preserves deterministic Weibo DOM identity instead of inventing an AI identity', () => {
+  const candidate = capture.toCommentCandidate({
+    candidate_id: 'weibo:c-100',
+    source_comment_id: 'c-100',
+    source_parent_comment_id: 'c-10',
+    source_root_comment_id: 'c-1',
+    capture_sort_mode: 'time',
+    inner_text: '用户A 评论正文'
+  });
+
+  assert.equal(candidate.candidate_id, 'weibo:c-100');
+  assert.equal(candidate.source_comment_id, 'c-100');
+  assert.equal(candidate.source_parent_comment_id, 'c-10');
+  assert.equal(candidate.source_root_comment_id, 'c-1');
+  assert.equal(candidate.capture_sort_mode, 'time');
+});
+
+test('uses the complete DOM composite fingerprint when Weibo exposes no comment ID', () => {
+  const candidate = capture.toCommentCandidate({
+    source_author_uid_href: '/u/123',
+    source_comment_text: '  用户A 评论正文  ',
+    source_comment_timestamp: '7-10 10:30',
+    source_reply_context: '回复 用户B',
+    source_root_context: '根评论正文',
+    source_composite_fingerprint: 'sha256:example',
+    capture_sort_mode: 'hot'
+  });
+
+  assert.equal(candidate.candidate_id, 'weibo:fp:sha256:example');
+  assert.equal(candidate.identity_mode, 'composite_fingerprint');
+  assert.equal(candidate.source_comment_id, '');
+  assert.equal(candidate.source_composite_fingerprint, 'sha256:example');
+  assert.equal(candidate.source_author_uid_href, '/u/123');
+  assert.equal(candidate.source_comment_text, '用户A 评论正文');
+});
+
+test('derives a stable composite fingerprint from normalized public DOM evidence', () => {
+  const evidence = {
+    source_author_uid_href: '/u/123',
+    source_comment_text: '用户A 评论正文',
+    source_comment_timestamp: '7-10 10:30',
+    source_reply_context: '回复 用户B',
+    source_root_context: '根评论正文'
+  };
+  const first = capture.toCommentCandidate(evidence);
+  const second = capture.toCommentCandidate({
+    ...evidence,
+    source_comment_text: '  用户A   评论正文  '
+  });
+
+  assert.match(first.source_composite_fingerprint, /^sha256:[a-f0-9]{64}$/);
+  assert.equal(first.source_composite_fingerprint, second.source_composite_fingerprint);
+  assert.equal(first.candidate_id, `weibo:fp:${first.source_composite_fingerprint}`);
+});
+
+test('passes explicit Weibo identity profile fields into scoped root inspection', async () => {
+  let receivedOptions;
+  const root = {
+    evaluate(_callback, options) {
+      receivedOptions = options;
+      return Promise.resolve({ records: [], controls: [] });
+    }
+  };
+  const profile = {
+    commentItemSelector: 'article[data-comment]',
+    replyContainerSelector: '[data-replies]',
+    endTexts: [],
+    identityMode: 'composite',
+    identityAttributes: {
+      comment: ['data-comment-id'],
+      parent: ['data-parent-id'],
+      root: ['data-root-id']
+    },
+    compositeIdentity: {
+      authorHrefSelector: 'a[href^="/u/"]',
+      commentTextSelector: '.comment-text',
+      timestampSelector: '.from'
+    }
+  };
+
+  await capture.inspectCommentRoot(root, profile);
+
+  assert.equal(receivedOptions.identityMode, 'composite');
+  assert.deepEqual(receivedOptions.identityAttributes, profile.identityAttributes);
+  assert.deepEqual(receivedOptions.compositeIdentity, profile.compositeIdentity);
+});
+
+test('propagates capture sort mode and flags Weibo records without configured identity evidence', async () => {
+  const root = {
+    async count() { return 1; },
+    evaluate() {
+      return Promise.resolve({
+        records: [{ type: 'comment', inner_text: '匿名评论', dom_path: 'ARTICLE:nth-of-type(1)' }],
+        controls: [],
+        declared_comment_count: 1,
+        end_signal: '',
+        scroll: { top: 0, scrollHeight: 0, clientHeight: 0, rect: { top: 0, left: 0, width: 1, height: 1 } }
+      });
+    }
+  };
+  const tab = { playwright: { locator() { return root; } } };
+  const profile = {
+    commentRootSelector: '.comment-root',
+    commentItemSelector: 'article[data-comment]',
+    replyContainerSelector: '[data-replies]',
+    endTexts: [],
+    identityMode: 'composite',
+    identityAttributes: { comment: [], parent: [], root: [] },
+    compositeIdentity: {
+      authorHrefSelector: 'a[href^="/u/"]',
+      commentTextSelector: '.comment-text',
+      timestampSelector: '.from'
+    }
+  };
+
+  const observation = await capture.captureScopedRecords(tab, profile, {
+    capture_sort_mode: 'time'
+  });
+
+  assert.equal(observation.candidates[0].capture_sort_mode, 'time');
+  assert.deepEqual(observation.partial_reasons, ['missing_identity_evidence']);
+});
+
+test('records completed hot and time stream observations', () => {
+  const state = capture.buildCaptureState({
+    platform: 'weibo',
+    streams: {
+      hot: { verified: true, stop_reason: 'page_end', unique_level1_count: 20 },
+      time: { verified: true, stop_reason: 'page_end', unique_level1_count: 23 }
+    },
+    partial_reasons: [' missing_identity_evidence ', 'missing_identity_evidence']
+  });
+
+  assert.equal(state.streams.hot.verified, true);
+  assert.equal(state.streams.hot.stop_reason, 'page_end');
+  assert.equal(state.streams.time.unique_level1_count, 23);
+  assert.equal(state.streams.time.unique_reply_count, 0);
+  assert.deepEqual(state.partial_reasons, ['missing_identity_evidence']);
+});

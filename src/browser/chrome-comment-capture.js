@@ -22,6 +22,14 @@ const SAFE_EXPAND_PATTERNS = [
 ];
 
 const REJECT_EXPAND_PATTERNS = [/收起/, /展开全文/, /商品/, /详情/];
+const CAPTURE_SORT_MODES = new Set(['hot', 'time']);
+const COMPOSITE_EVIDENCE_FIELDS = [
+  'source_author_uid_href',
+  'source_comment_text',
+  'source_comment_timestamp',
+  'source_reply_context',
+  'source_root_context'
+];
 
 function normalizeControlText(value) {
   return String(value == null ? '' : value).replace(/\s+/g, ' ').trim();
@@ -50,6 +58,48 @@ function nonNegativeInteger(value, fallback = 0) {
   return Number.isFinite(number) && number >= 0 ? Math.floor(number) : fallback;
 }
 
+function normalizeSourceCaptureBatchIds(value) {
+  const values = Array.isArray(value) ? value : (value == null ? [] : [value]);
+  return [...new Set(values.map(normalizeControlText).filter(Boolean))];
+}
+
+function normalizeEvidence(raw) {
+  const evidence = {};
+  for (const name of COMPOSITE_EVIDENCE_FIELDS) {
+    evidence[name] = normalizeControlText(raw?.[name]);
+  }
+  return evidence;
+}
+
+function isCompleteCompositeEvidence(evidence, roleHint) {
+  const hasRequiredBaseEvidence = [
+    evidence.source_author_uid_href,
+    evidence.source_comment_text,
+    evidence.source_comment_timestamp,
+    evidence.source_root_context
+  ].every(Boolean);
+  return hasRequiredBaseEvidence && (
+    roleHint !== 'reply_candidate' || Boolean(evidence.source_reply_context)
+  );
+}
+
+function createCompositeFingerprint(evidence) {
+  return `sha256:${crypto.createHash('sha256').update(JSON.stringify(
+    COMPOSITE_EVIDENCE_FIELDS.map(name => evidence[name] || '')
+  )).digest('hex')}`;
+}
+
+function normalizeStreamState(input = {}) {
+  return {
+    verified: Boolean(input.verified),
+    stop_reason: normalizeControlText(input.stop_reason),
+    end_signal: normalizeControlText(input.end_signal),
+    unique_level1_count: nonNegativeInteger(input.unique_level1_count),
+    unique_reply_count: nonNegativeInteger(input.unique_reply_count),
+    remaining_expand_count: nonNegativeInteger(input.remaining_expand_count)
+  };
+}
+
 function toCommentCandidate(raw, index = 1, capturedAt = new Date().toISOString()) {
   const safeRaw = raw || {};
   const innerText = safeRaw.inner_text || [safeRaw.author, safeRaw.content, safeRaw.time]
@@ -60,9 +110,23 @@ function toCommentCandidate(raw, index = 1, capturedAt = new Date().toISOString(
     ? 'reply_candidate'
     : 'comment_candidate');
   const rect = safeRaw.rect || { top: 0, left: 0, width: 0, height: 0 };
-  const candidateId = safeRaw.candidate_id || `candidate_${String(index).padStart(6, '0')}`;
+  const sourceCommentId = normalizeControlText(safeRaw.source_comment_id);
+  const sourceParentCommentId = normalizeControlText(safeRaw.source_parent_comment_id);
+  const sourceRootCommentId = normalizeControlText(safeRaw.source_root_comment_id);
+  const evidence = normalizeEvidence(safeRaw);
+  const hasCompositeEvidence = isCompleteCompositeEvidence(evidence, roleHint);
+  const sourceCompositeFingerprint = hasCompositeEvidence
+    ? (normalizeControlText(safeRaw.source_composite_fingerprint) ||
+      createCompositeFingerprint(evidence))
+    : '';
+  const captureSortMode = normalizeControlText(safeRaw.capture_sort_mode);
+  const candidateId = sourceCommentId
+    ? `weibo:${sourceCommentId}`
+    : (sourceCompositeFingerprint
+      ? `weibo:fp:${sourceCompositeFingerprint}`
+      : (safeRaw.candidate_id || `candidate_${String(index).padStart(6, '0')}`));
 
-  return {
+  const candidate = {
     candidate_id: candidateId,
     candidate_hash: safeRaw.candidate_hash || createCandidateHash(
       `${roleHint}|${safeRaw.dom_path || ''}|${innerText}`
@@ -80,6 +144,30 @@ function toCommentCandidate(raw, index = 1, capturedAt = new Date().toISOString(
     },
     captured_at: safeRaw.captured_at || capturedAt
   };
+
+  if (sourceCommentId) {
+    candidate.identity_mode = 'dom_id';
+  } else if (sourceCompositeFingerprint) {
+    candidate.identity_mode = 'composite_fingerprint';
+  }
+  if (CAPTURE_SORT_MODES.has(captureSortMode)) {
+    candidate.capture_sort_mode = captureSortMode;
+  }
+
+  Object.assign(candidate, {
+    source_comment_id: sourceCommentId,
+    source_parent_comment_id: sourceParentCommentId,
+    source_root_comment_id: sourceRootCommentId,
+    source_composite_fingerprint: sourceCompositeFingerprint,
+    source_author_uid_href: evidence.source_author_uid_href,
+    source_comment_text: evidence.source_comment_text,
+    source_comment_timestamp: evidence.source_comment_timestamp,
+    source_reply_context: evidence.source_reply_context,
+    source_root_context: evidence.source_root_context,
+    source_capture_batch_ids: normalizeSourceCaptureBatchIds(safeRaw.source_capture_batch_ids)
+  });
+
+  return candidate;
 }
 
 function buildCaptureState(input = {}) {
@@ -98,6 +186,7 @@ function buildCaptureState(input = {}) {
   const scroll = input.scroll || {};
   const endSignal = normalizeControlText(input.end_signal);
   const stopReason = input.stop_reason || (endSignal ? 'page_end' : 'in_progress');
+  const streams = input.streams || {};
 
   return {
     schema_version: 'chrome-comment-capture-v1',
@@ -118,7 +207,14 @@ function buildCaptureState(input = {}) {
     seen_candidate_count: nonNegativeInteger(input.seen_candidate_count, seenCandidateHashes.length),
     has_more: typeof input.has_more === 'boolean'
       ? input.has_more
-      : !endSignal && remainingExpandCount > 0
+      : !endSignal && remainingExpandCount > 0,
+    partial_reasons: [...new Set((input.partial_reasons || [])
+      .map(normalizeControlText)
+      .filter(Boolean))],
+    streams: {
+      hot: normalizeStreamState(streams.hot),
+      time: normalizeStreamState(streams.time)
+    }
   };
 }
 
@@ -132,7 +228,10 @@ function batchState(state = {}) {
     captured_record_count: nonNegativeInteger(state.captured_record_count),
     remaining_expand_count: nonNegativeInteger(state.remaining_expand_count),
     end_signal: normalizeControlText(state.end_signal),
-    count_gap: nonNegativeInteger(state.count_gap)
+    count_gap: nonNegativeInteger(state.count_gap),
+    partial_reasons: [...new Set((state.partial_reasons || [])
+      .map(normalizeControlText)
+      .filter(Boolean))]
   };
 }
 
@@ -143,6 +242,7 @@ function buildCommentDomBatch(input = {}) {
     batch_id: input.batch_id || '',
     task_id: input.task_id || '',
     platform: input.platform || 'unknown',
+    batch_kind: input.batch_kind || 'capture',
     source_url: input.source_url || '',
     captured_at: input.captured_at || new Date().toISOString(),
     scroll: {
@@ -227,7 +327,18 @@ function inspectCommentRoot(root, profile) {
     commentItemSelector: profile.commentItemSelector,
     replyContainerSelector: profile.replyContainerSelector || '',
     endTexts: profile.endTexts || [],
-    declaredCountSelector: profile.declaredCountSelector || ''
+    declaredCountSelector: profile.declaredCountSelector || '',
+    identityMode: profile.identityMode || '',
+    identityAttributes: profile.identityAttributes || {
+      comment: [],
+      parent: [],
+      root: []
+    },
+    compositeIdentity: profile.compositeIdentity || {
+      authorHrefSelector: '',
+      commentTextSelector: '',
+      timestampSelector: ''
+    }
   };
 
   return root.evaluate((element, options) => {
@@ -269,19 +380,91 @@ function inspectCommentRoot(root, profile) {
       visit(node);
       return compact(pieces.join(' '));
     };
+    const readConfiguredAttribute = (node, attributeNames) => {
+      for (const name of attributeNames || []) {
+        const value = compact(node && node.getAttribute(name));
+        if (value) return value;
+      }
+      return '';
+    };
+    const readConfiguredText = (node, selector) => {
+      if (!node || !selector) return '';
+      const match = node.querySelector(selector);
+      return compact(match && match.textContent);
+    };
+    const readConfiguredHref = (node, selector) => {
+      if (!node || !selector) return '';
+      const match = node.querySelector(selector);
+      return compact(match && match.getAttribute('href'));
+    };
+    const findCommentAncestor = node => {
+      let current = node && node.parentElement;
+      while (current && current !== element) {
+        if (current.matches(options.commentItemSelector)) return current;
+        current = current.parentElement;
+      }
+      return null;
+    };
+    const findRootComment = node => {
+      let rootComment = node;
+      let ancestor = findCommentAncestor(rootComment);
+      while (ancestor) {
+        rootComment = ancestor;
+        ancestor = findCommentAncestor(rootComment);
+      }
+      return rootComment;
+    };
     const records = Array.from(element.querySelectorAll(options.commentItemSelector))
       .filter(visible)
       .map(node => {
         const rect = node.getBoundingClientRect();
         const authorLink = node.querySelector('a');
         const isReply = Boolean(options.replyContainerSelector && node.closest(options.replyContainerSelector));
+        const parentComment = isReply ? findCommentAncestor(node) : null;
+        const rootComment = isReply ? (parentComment && findRootComment(node)) : node;
+        const identityAttributes = options.identityAttributes || {};
+        const sourceCommentId = options.identityMode === 'dom_id'
+          ? readConfiguredAttribute(node, identityAttributes.comment)
+          : '';
+        const sourceParentCommentId = options.identityMode === 'dom_id'
+          ? (readConfiguredAttribute(node, identityAttributes.parent) ||
+            readConfiguredAttribute(parentComment, identityAttributes.comment))
+          : '';
+        const sourceRootCommentId = options.identityMode === 'dom_id'
+          ? (readConfiguredAttribute(node, identityAttributes.root) ||
+            readConfiguredAttribute(rootComment, identityAttributes.comment))
+          : '';
+        const compositeIdentity = options.compositeIdentity || {};
+        const sourceAuthorUidHref = options.identityMode === 'composite'
+          ? readConfiguredHref(node, compositeIdentity.authorHrefSelector)
+          : '';
+        const sourceCommentText = options.identityMode === 'composite'
+          ? readConfiguredText(node, compositeIdentity.commentTextSelector)
+          : '';
+        const sourceCommentTimestamp = options.identityMode === 'composite'
+          ? readConfiguredText(node, compositeIdentity.timestampSelector)
+          : '';
+        const sourceReplyContext = isReply && parentComment
+          ? textWithoutReplies(parentComment, options.replyContainerSelector)
+          : '';
+        const sourceRootContext = rootComment
+          ? textWithoutReplies(rootComment, options.replyContainerSelector)
+          : '';
         return {
           type: isReply ? 'reply' : 'comment',
           author: compact(authorLink && authorLink.textContent),
           content: textWithoutReplies(node, options.replyContainerSelector),
-          time: '',
+          time: sourceCommentTimestamp,
           dom_path: domPath(node),
           html: String(node.outerHTML || '').slice(0, 8000),
+          source_comment_id: sourceCommentId,
+          source_parent_comment_id: sourceParentCommentId,
+          source_root_comment_id: sourceRootCommentId,
+          source_author_uid_href: sourceAuthorUidHref,
+          source_comment_text: sourceCommentText,
+          source_comment_timestamp: sourceCommentTimestamp,
+          source_reply_context: sourceReplyContext,
+          source_root_context: sourceRootContext,
           nearby_buttons: Array.from(node.querySelectorAll('button,[role="button"]'))
             .map(button => compact(button.textContent))
             .filter(Boolean)
@@ -340,17 +523,27 @@ async function captureScopedRecords(tab, profileOrName, options = {}) {
   const capturedAt = options.captured_at || new Date().toISOString();
   const startIndex = nonNegativeInteger(options.start_index, 0) + 1;
   const candidates = observed.records.map((record, index) => toCommentCandidate(
-    record,
+    Object.assign({}, record, {
+      capture_sort_mode: options.capture_sort_mode || record.capture_sort_mode,
+      source_capture_batch_ids: options.source_capture_batch_ids || record.source_capture_batch_ids
+    }),
     startIndex + index,
     capturedAt
   ));
+  const partialReasons = [...new Set([
+    ...(observed.partial_reasons || []).map(normalizeControlText).filter(Boolean),
+    ...(profile.identityMode && candidates.some(candidate => !candidate.identity_mode)
+      ? ['missing_identity_evidence']
+      : [])
+  ])];
 
   return Object.assign({}, observed, {
     root_selector: profile.commentRootSelector,
     declared_comment_count: options.declared_comment_count == null
       ? observed.declared_comment_count
       : nonNegativeInteger(options.declared_comment_count),
-    candidates
+    candidates,
+    partial_reasons: partialReasons
   });
 }
 
@@ -419,6 +612,7 @@ module.exports = {
   buildCommentDomBatch,
   expandExactLabel,
   expandVisibleReplies,
+  inspectCommentRoot,
   captureScopedRecords,
   scrollCommentContainer,
   writeCaptureArtifacts

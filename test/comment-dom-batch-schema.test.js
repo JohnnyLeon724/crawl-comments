@@ -30,8 +30,10 @@ test('comment DOM batch schema defines batch-level metadata', () => {
     'douyin',
     'xiaohongshu',
     'bilibili',
+    'weibo',
     'unknown'
   ]);
+  assert.deepEqual(schema.properties.batch_kind.enum, ['capture', 'model']);
 });
 
 test('comment DOM batch schema constrains scroll, state, and limits', () => {
@@ -95,4 +97,47 @@ test('comment DOM batch schema constrains candidate shape', () => {
   ]);
   assert.equal(candidate.properties.rect.required.includes('top'), true);
   assert.equal(candidate.properties.nearby_buttons.type, 'array');
+
+  for (const field of [
+    'capture_sort_mode',
+    'identity_mode',
+    'source_comment_id',
+    'source_parent_comment_id',
+    'source_root_comment_id',
+    'source_composite_fingerprint',
+    'source_author_uid_href',
+    'source_comment_text',
+    'source_comment_timestamp',
+    'source_reply_context',
+    'source_root_context',
+    'source_capture_batch_ids'
+  ]) {
+    assert.equal(Boolean(candidate.properties[field]), true, `${field} should be supported`);
+  }
+  assert.deepEqual(candidate.properties.capture_sort_mode.enum, ['hot', 'time']);
+  assert.deepEqual(candidate.properties.identity_mode.enum, [
+    'dom_id',
+    'composite_fingerprint'
+  ]);
+  assert.equal(candidate.properties.source_capture_batch_ids.type, 'array');
+});
+
+test('rejects composite candidates without all public identity evidence', () => {
+  const compositeRule = schema.properties.candidates.items.allOf.find(rule => (
+    rule.if?.properties?.identity_mode?.const === 'composite_fingerprint'
+  ));
+
+  assert.ok(compositeRule, 'schema needs a composite-fingerprint conditional rule');
+  assert.deepEqual(compositeRule.then.required, [
+    'source_author_uid_href',
+    'source_comment_text',
+    'source_comment_timestamp',
+    'source_reply_context',
+    'source_root_context',
+    'source_composite_fingerprint'
+  ]);
+  assert.deepEqual(compositeRule.then.properties.source_author_uid_href, {
+    type: 'string',
+    minLength: 1
+  });
 });

@@ -29,7 +29,11 @@
     },
     "platform": {
       "type": "string",
-      "enum": ["douyin", "xiaohongshu", "bilibili", "unknown"]
+      "enum": ["douyin", "xiaohongshu", "bilibili", "weibo", "unknown"]
+    },
+    "batch_kind": {
+      "type": "string",
+      "enum": ["capture", "model"]
     },
     "source_url": {
       "type": "string"
@@ -107,6 +111,13 @@
         "count_gap": {
           "type": "integer",
           "minimum": 0
+        },
+        "partial_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -193,8 +204,137 @@
           },
           "captured_at": {
             "type": "string"
+          },
+          "capture_sort_mode": {
+            "type": "string",
+            "enum": ["hot", "time"]
+          },
+          "identity_mode": {
+            "type": "string",
+            "enum": ["dom_id", "composite_fingerprint"]
+          },
+          "source_comment_id": {
+            "type": "string"
+          },
+          "source_parent_comment_id": {
+            "type": "string"
+          },
+          "source_root_comment_id": {
+            "type": "string"
+          },
+          "source_composite_fingerprint": {
+            "type": "string"
+          },
+          "source_author_uid_href": {
+            "type": "string"
+          },
+          "source_comment_text": {
+            "type": "string"
+          },
+          "source_comment_timestamp": {
+            "type": "string"
+          },
+          "source_reply_context": {
+            "type": "string"
+          },
+          "source_root_context": {
+            "type": "string"
+          },
+          "source_capture_batch_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": ["identity_mode"],
+              "properties": {
+                "identity_mode": {
+                  "const": "dom_id"
+                }
+              }
+            },
+            "then": {
+              "required": ["source_comment_id"],
+              "properties": {
+                "source_comment_id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["identity_mode"],
+              "properties": {
+                "identity_mode": {
+                  "const": "composite_fingerprint"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "source_author_uid_href",
+                "source_comment_text",
+                "source_comment_timestamp",
+                "source_reply_context",
+                "source_root_context",
+                "source_composite_fingerprint"
+              ],
+              "properties": {
+                "source_author_uid_href": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_comment_text": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_comment_timestamp": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_reply_context": {
+                  "type": "string"
+                },
+                "source_root_context": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "source_composite_fingerprint": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["identity_mode", "role_hint"],
+              "properties": {
+                "identity_mode": {
+                  "const": "composite_fingerprint"
+                },
+                "role_hint": {
+                  "const": "reply_candidate"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "source_reply_context": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        ]
       }
     }
   }
