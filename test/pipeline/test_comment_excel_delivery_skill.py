@@ -203,6 +203,26 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
             r"(?is)exact.*expand.*never.*收起",
         )
 
+    def test_weibo_comment_docs_require_chrome_model_only_capture(self):
+        skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+        weibo_rules = (ROOT / "docs" / "tcl_weibo_comment_workflow_rules_2026-07-07.md").read_text(
+            encoding="utf-8"
+        )
+        combined = skill + "\n" + workflow
+
+        for text in [
+            "Weibo", "chrome:control-chrome", "按热度", "按时间",
+            "source_comment_id", "partial", "do not bypass", "no MCP/API fallback",
+            "Chrome/model-only", "80 candidates/24,000 characters",
+            "model-output-schema.json",
+        ]:
+            self.assertIn(text, combined + "\n" + weibo_rules)
+
+        self.assertNotIn("评论抓取优先走接口", weibo_rules)
+        self.assertNotIn("buildComments", weibo_rules)
+        self.assertNotIn("OpenCLI 评论接口", weibo_rules)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,7 +11,7 @@ The split of responsibility is fixed:
 
 - Scripts parse Excel, normalize JSON, merge runs, QA, resume, and generate workbooks.
 - Chrome is the default browser execution surface. Use `chrome:control-chrome` and `src/browser/chrome-comment-capture.js` to operate the user's logged-in Chrome session: open a fresh task tab, expand only safe exact visible text within the unique comment root, scroll that container through Chrome CUA, capture bounded DOM candidate batches, and close/finalize the tab after the task.
-- MCP/CDP tools remain fallback/debug paths for reproducing legacy behavior, comparing candidate capture, or continuing when Chrome extension control is unavailable.
+- MCP/CDP tools remain fallback/debug paths for reproducing legacy behavior, comparing candidate capture, or continuing when Chrome extension control is unavailable. This fallback never applies to Weibo comment tasks.
 - AI reads DOM candidate batches and produces structured comment JSON that matches the project schema.
 
 Before executing a project, read [references/workflow.md](references/workflow.md). It contains the command order, artifact names, and acceptance checks.
@@ -31,6 +31,17 @@ Before executing a project, read [references/workflow.md](references/workflow.md
 11. Use `src/pipeline/resume_comment_project.py` before rerunning a partially completed project; write reruns to the suggested rerun directory.
 12. For historical B站 delivery files, import them with `src/pipeline/import_bilibili_delivery.py` instead of manually mapping columns.
 13. Before claiming completion, run the relevant Python pipeline tests and, when JS/MCP behavior is touched, run the Node tests.
+
+## Weibo Comment Tasks: Chrome/model-only
+
+Weibo comment collection is Chrome/model-only. `chrome:control-chrome` and model extraction are mandatory: collect only from the logged-in, visible Weibo comment UI, then structure only the saved DOM candidates. There is **no MCP/API fallback** for Weibo comments; do not call comment APIs, OpenCLI, MCP/CDP, or another source when Chrome is blocked.
+
+1. Require a validated explicit Weibo profile with unique comment root, sort scope, comment item, reply container, scroll container, and identity configuration. Read only the explicit profile scope; do not guess selectors or inspect a page-wide comment-like region.
+2. Capture both primary-comment streams: switch and verify `按热度`, finish its safe scoped capture, then switch and verify `按时间` and capture it. Expand only exact approved reply labels and scroll only the observed comment container.
+3. Browser capture batches are evidence-only and are retained for audit and resume. Deduplicate their candidates before model extraction; model batches contain at most 80 candidates/24,000 characters, whichever limit is reached first.
+4. Chrome must provide identity evidence. Preserve `source_comment_id` (and parent/root IDs) when visible; otherwise use only the complete deterministic public-DOM composite fingerprint. A composite-only Weibo task is always `partial` and must never claim dual-sort all-complete.
+5. Generate `model-output-schema.json` from the canonical extraction schema before each local Codex invocation so the strict model schema is compatible. The model may extract fields from candidates, but cannot invent IDs, browse URLs, click controls, or change sort state.
+6. On login, CAPTCHA, verification, access limits, ambiguous profile scope, failed sort verification, or incomplete reply expansion, stop and retain the scoped evidence as `partial` or `failed`. Ask the user to resolve access checks; do not bypass them.
 
 ## Expected Outputs
 

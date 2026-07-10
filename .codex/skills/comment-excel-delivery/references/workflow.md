@@ -101,9 +101,22 @@ python src/pipeline/merge_task_batches.py \
   --task-dir output/<project_id>/runs/<task_id>
 ```
 
+### Weibo comment tasks: Chrome/model-only
+
+Weibo comments are collected only through `chrome:control-chrome` from the user's logged-in, visible page and then structured by the model from saved candidates. The following Weibo rules override the general fallback section below: there is no MCP/API fallback for Weibo comments.
+
+1. Load a validated explicit Weibo profile before any capture. It must identify exactly one comment root, sort scope, comment item selector, reply container, scroll container, and either DOM-ID or complete composite identity fields. Read only the explicit profile scope; never use a page-wide text lookup or invent a selector.
+2. Within the unique sort scope, capture `按热度` first and verify the configured selected state. Safely expand only exact approved reply labels and scroll the observed comment container until the scoped stop condition. Then switch to `按时间`, verify its selected state, and repeat. Keep separate `streams.hot` and `streams.time` state in `capture-state.json`.
+3. Every scroll window is a browser evidence-only `comment-dom-batch.json`; it is not a model request. Deduplicate candidates across windows and the two streams, then form model batches of at most 80 candidates/24,000 characters, whichever limit is reached first. Only model batches require `ai-comment-extraction.json`.
+4. Preserve Chrome-read `source_comment_id`, `source_parent_comment_id`, and `source_root_comment_id` when available. If there is no stable comment ID, use only the complete deterministic public-DOM composite fingerprint. Composite-only capture is always `partial` and must never claim dual-sort all-complete, even when both streams reach page end.
+5. Before each local Codex extraction call, generate `model-output-schema.json` from the canonical schema with `src/normalize/model-output-schema.js`; use that strict compatible clone for `--output-schema`. The model does not browse, click, sort, or supply identity fields.
+6. On a login wall, CAPTCHA, verification, risk control, access limit, ambiguous root, failed sort verification, or incomplete safe reply expansion, stop and preserve the evidence as `partial` or `failed`. Ask the user to handle access checks; do not bypass them or substitute an interface/API source.
+
 ### MCP/CDP fallback
 
 Use MCP/CDP only when Chrome extension control is unavailable, when the user explicitly requests the legacy path, or when debugging MCP capture behavior.
+
+This MCP/CDP fallback does not apply to Weibo comment tasks: Weibo has no MCP/API fallback.
 
 Coordinate clicking remains the MCP fallback production interaction mode. The fallback main tool is `expand_and_capture_comment_batches`:
 

@@ -27,10 +27,11 @@
 
 | 功能 | 组件/脚本 | 作用 |
 |---|---|---|
-| 浏览器登录态与接口调用 | `scripts/opencli-local.sh` | 固定使用项目内 `opencli-v1.6.8`，复用微博登录态 |
+| 搜索/官号发帖的登录态与接口调用 | `scripts/opencli-local.sh` | 固定使用项目内 `opencli-v1.6.8`，复用微博登录态；不用于评论采集 |
 | 搜索关键词微博链接 | `scripts/search_weibo_links.js` | 打开微博搜索页，按关键词和时间抓全量搜索页 |
 | 抓官号发帖 | `scripts/fetch_weibo_user_posts.js` | 通过微博用户发帖接口抓两个官号指定时间范围内的微博 |
-| 批量抓评论 | `scripts/fetch_weibo_comments_batch_all.js` | 按微博链接抓一级评论；`--mode all` 时继续抓二级回复 |
+| 批量抓评论 | `chrome:control-chrome` + `src/browser/chrome-comment-capture.js` | 在已登录 Chrome 的可见评论区采集双排序 DOM 证据 |
+| 评论字段提取 | Codex 模型 + `src/normalize/model-output-schema.js` | 只从保存的候选 DOM 批次结构化评论字段 |
 | 帖子语义审阅输入 | `scripts/prepare_weibo_semantic_review.py` | 把搜索帖子切分成语义审阅批次 |
 | 评论语义审阅输入 | `scripts/prepare_weibo_comment_semantic_review.py` | 把评论/回复切分成语义审阅 prompt |
 | 语义判定模型 | `/Applications/Codex.app/Contents/Resources/codex exec` | 按 JSON schema 输出语义判定结果 |
@@ -103,68 +104,26 @@ node scripts/fetch_weibo_user_posts.js \
 
 ## 5. 微博评论抓取规则
 
-执行脚本：
+微博评论采集固定采用 **Chrome/model-only** 流程：必须用 `chrome:control-chrome` 操作用户已登录 Chrome 中可见的 Weibo 评论区，再由模型从已保存的 DOM 候选中提取字段。关键词找帖和官号发帖仍按第 3、4 节的接口流程执行；它们不授权接口抓取评论。
 
-```bash
-node scripts/fetch_weibo_comments_batch_all.js \
-  --input output/weibo_official_posts_tcl_2026-06-29_to_2026-07-06/weibo_official_posts_2026-06-29_to_2026-07-06.json \
-  --out-dir output/weibo_official_comments_tcl_2026-06-29_to_2026-07-06 \
-  --mode all \
-  --resume \
-  --delay-ms 150 \
-  --post-delay-ms 400 \
-  --fetch-timeout-ms 30000 \
-  --opencli-command-timeout-ms 1800000 \
-  --max-consecutive-failures 3 \
-  --retries 2
-```
+每条微博的执行顺序：
 
-评论抓取不是 DOM 滚动抓页面文本，而是在浏览器登录态里调用微博接口。
+1. 在 Chrome 打开一个新的任务标签页，并通过已验证的 Weibo profile 确认唯一评论根、排序范围、评论节点、回复容器和滚动容器。profile 未通过唯一性/身份字段验证时停止为 `partial`，不得猜测 selector。
+2. 只读取 explicit profile scope 内的可见文本、局部 HTML、公开 DOM 属性和控件；页面读取保持只读。登录、CAPTCHA、验证码、风控或访问限制出现时暂停，请用户处理；do not bypass，也不改用其他来源。
+3. 在唯一排序范围内精确切换“按热度”，验证选中态后，安全展开可见的二级回复并仅滚动评论容器；记录每个滚动窗口的 `comment-dom-batch.json` 和 `capture-state.json`。
+4. 在同一唯一排序范围内精确切换“按时间”，同样验证选中态、展开安全回复并采集。两个一级评论流按稳定证据合并去重；浏览器滚动批次只用于断点恢复与审计，不等于一次模型调用。
+5. 先汇总、去重浏览器候选，再构造模型批次。每个模型批次最多 **80 candidates/24,000 characters**，先达到任一上限即切分。模型只从候选读取字段，不访问 URL、不控制浏览器、也不生成或改写身份字段。
+6. 模型提取仍使用 canonical `schemas/ai-comment-extraction.schema.json` 的语义，但每次 Codex CLI 调用先由 `src/normalize/model-output-schema.js` 生成严格兼容的 `model-output-schema.json`，再传给 `--output-schema`。capture batch 是 evidence-only；只有 model batch 才需要 `ai-comment-extraction.json`。
 
-主要接口：
+评论身份与完成状态：
 
-1. 微博正文元信息：
-   - `https://weibo.com/ajax/statuses/show`
-   - 参数：`id=<postId>`、`locale=zh-CN`、`isGetLongText=true`
+1. **DOM-ID 模式**：Chrome 从受限 DOM 读取 `source_comment_id`、`source_parent_comment_id` 和 `source_root_comment_id`。只有“按热度”和“按时间”均完成、回复安全展开耗尽、模型与 QA 通过且 DOM-ID 覆盖率满足门槛时，任务才可以为 `ok`。
+2. **复合指纹模式**：页面没有稳定评论 ID 时，仅可由公开作者 UID href、规范化评论正文、时间、回复上下文和根评论上下文确定性生成 `source_composite_fingerprint`。它可用于去重和恢复，但任务始终是 `partial`，不得宣称双排序全量完成。
+3. 排序无法验证、身份证据缺失、登录/验证码、根节点不唯一、回复无法完全展开或模型批次缺失时，保留审计产物并明确记录 `partial` 或 `failed` 原因。只有项目 QA 为 `ok` 才能生成正式全量交付；用户明确要求的测试样例必须标明范围。
 
-2. 一级评论：
-   - `https://weibo.com/ajax/statuses/buildComments`
-   - 参数核心：
-     - `id=<postId>`
-     - `uid=<authorUid>`
-     - `fetch_level=0`
-     - `count=20`
-     - `is_reload=1`
-     - `is_show_bulletin=2`
-     - `is_mix=0`
-     - `locale=zh-CN`
-   - 热门排序：默认参数
-   - 时间排序：额外加 `flow=1`
-   - 翻页：用接口返回的 `max_id`
+Weibo 评论没有 MCP/API fallback：不得调用评论接口、MCP/CDP、OpenCLI 或隐藏 API 作为 Chrome 失败时的替代路径。
 
-3. 二级回复：
-   - 仍然是 `https://weibo.com/ajax/statuses/buildComments`
-   - 参数核心：
-     - `id=<rootCommentId>`
-     - `uid=<authorUid>`
-     - `fetch_level=1`
-     - `is_mix=1`
-     - `max_id=<maxId>`
-     - `count=20`
-     - `locale=zh-CN`
-
-抓取逻辑：
-
-1. 每条微博先抓正文元信息，拿到作者 UID、正文、评论数等。
-2. 一级评论分别抓热门流和时间流。
-3. 两个一级评论流按 `comment_id` 合并去重。
-4. `--mode level1`：只输出一级评论。
-5. `--mode all`：一级评论和二级回复放在同一个 CSV/JSON 里。
-6. `--mode all` 时，脚本会找 `reply_count > 0` 的一级评论，再逐条调用二级回复接口。
-7. 每条微博单独保存一份 JSON/CSV，最后合并成总表。
-8. 如果单条微博失败，会记录到 `manifest.json`；开启 `--resume` 后可跳过已成功的微博。
-
-评论总表核心字段：
+评论标准化结果的核心字段：
 
 | 字段 | 含义 |
 |---|---|
@@ -334,7 +293,7 @@ Excel 摘要里不写入：
 2. 搜索结果不是空跑。
 3. 关键词帖子已去重。
 4. 去重后的帖子正文确实包含 `tcl`、`tcl电视` 或 `tcl屏幕`。
-5. 评论抓取 `manifest.json` 里成功数和失败数明确。
+5. 每条微博的 `capture-state.json`、双排序 stream 状态、模型批次和 QA 原因明确；`partial` 不得作为完整交付。
 6. 评论总表里 `row_type` 能区分一级评论和二级回复。
 7. 语义审阅结果条数和输入条数一致。
 8. Excel 能正常打开。
@@ -344,9 +303,8 @@ Excel 摘要里不写入：
 ## 10. 关键注意事项
 
 1. 抓取依赖微博登录态，登录失效时会跳到 `passport.weibo.com/sso/signin`。
-2. opencli 必须优先使用项目内 `scripts/opencli-local.sh`，避免误用全局 opencli 版本。
-3. 评论抓取优先走接口，不按 DOM 文本滚动抓。
-4. `--mode all` 时，一级评论和二级回复放在同一个 CSV，不拆两个文件。
-5. 异常微博可以跳过，失败信息记录在 `manifest.json`。
+2. 搜索和官号发帖接口仍固定使用项目内 `scripts/opencli-local.sh`；微博评论采集不得使用该路径。
+3. 评论必须使用 Chrome/model-only 双排序流程；没有 MCP/API fallback。
+4. 异常微博不能静默跳过，必须保留 Chrome/model 审计产物并标记 `partial` 或 `failed`。
 6. 语义判定要读整段文本，不用关键词做最终负面判断。
 7. 帖子清洗和评论情感是两套规则：帖子先判断是否纳入分析，评论只判断当前评论/回复的态度。
