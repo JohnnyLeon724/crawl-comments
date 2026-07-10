@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.comment-crawler/schemas/weibo-comment-profile.schema.json",
+  "title": "Weibo Chrome Comment Profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "platform",
+    "postRootSelector",
+    "commentRootSelector",
+    "commentItemSelector",
+    "replyContainerSelector",
+    "scrollContainerSelector",
+    "sortScopeSelector",
+    "sorts",
+    "endTexts",
+    "safeReplyExpandPatterns",
+    "identityAttributes"
+  ],
+  "properties": {
+    "platform": {
+      "type": "string",
+      "const": "weibo"
+    },
+    "postRootSelector": { "$ref": "#/$defs/nonEmptyString" },
+    "commentRootSelector": { "$ref": "#/$defs/nonEmptyString" },
+    "commentItemSelector": { "$ref": "#/$defs/nonEmptyString" },
+    "replyContainerSelector": { "$ref": "#/$defs/nonEmptyString" },
+    "scrollContainerSelector": { "$ref": "#/$defs/nonEmptyString" },
+    "sortScopeSelector": { "$ref": "#/$defs/nonEmptyString" },
+    "sorts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hot", "time"],
+      "properties": {
+        "hot": { "$ref": "#/$defs/sort" },
+        "time": { "$ref": "#/$defs/sort" }
+      }
+    },
+    "endTexts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "safeReplyExpandPatterns": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/nonEmptyString" }
+    },
+    "identityAttributes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comment", "parent", "root"],
+      "properties": {
+        "comment": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "parent": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "root": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "sort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "selectedAttribute", "selectedValue"],
+      "properties": {
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "selectedAttribute": { "$ref": "#/$defs/nonEmptyString" },
+        "selectedValue": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}

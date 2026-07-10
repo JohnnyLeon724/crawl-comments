@@ -21,6 +21,7 @@ test('core crawler modules are grouped under src with legacy wrappers', () => {
     ['src/browser/crawl-comments-playwright.js', 'script/crawl-comments-playwright.js', '../src/browser/crawl-comments-playwright.js'],
     ['src/browser/comment-crawler-config.js', 'script/comment-crawler-config.js', '../src/browser/comment-crawler-config.js'],
     ['src/browser/comment-crawler-log.js', 'script/comment-crawler-log.js', '../src/browser/comment-crawler-log.js'],
+    ['src/browser/weibo-comment-profile.js', 'script/validate-weibo-comment-profile.js', '../src/browser/weibo-comment-profile.js'],
     ['src/normalize/normalize-comments.js', 'script/normalize-comments.js', '../src/normalize/normalize-comments.js'],
     ['src/normalize/normalize-ai-comment-extraction.js', 'script/normalize-ai-comment-extraction.js', '../src/normalize/normalize-ai-comment-extraction.js'],
     ['src/normalize/build-comment-excel-report.js', 'script/build-comment-excel-report.js', '../src/normalize/build-comment-excel-report.js'],
