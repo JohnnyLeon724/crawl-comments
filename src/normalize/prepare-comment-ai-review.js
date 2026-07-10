@@ -4,17 +4,19 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const DEFAULT_BATCH_SIZE = 50;
+const DEFAULT_BATCH_SIZE = 80;
+const DEFAULT_MAX_CHARS = 24000;
 
 function printUsage() {
   console.log(`
 用法：
-  node script/prepare-comment-ai-review.js --input normalized-comments.jsonl --out-dir ai-review-input --batch-size 50
+  node script/prepare-comment-ai-review.js --input normalized-comments.jsonl --out-dir ai-review-input
 
 参数：
   --input       必填，normalized-comments.jsonl
   --out-dir     必填，AI 审阅输入输出目录
-  --batch-size  可选，每批评论数量，默认 50
+  --batch-size  可选，每批评论数量，默认 80
+  --max-chars   可选，每批评论与回复上下文的最大字符数，默认 24000
   --help        查看帮助
 `.trim());
 }
@@ -40,6 +42,7 @@ function parseArgs(argv) {
     input: '',
     outDir: '',
     batchSize: DEFAULT_BATCH_SIZE,
+    maxChars: DEFAULT_MAX_CHARS,
     help: false
   };
 
@@ -65,6 +68,12 @@ function parseArgs(argv) {
 
     if (token === '--batch-size') {
       args.batchSize = parsePositiveInt(readFlagValue(argv, i, token), token);
+      i += 1;
+      continue;
+    }
+
+    if (token === '--max-chars') {
+      args.maxChars = parsePositiveInt(readFlagValue(argv, i, token), token);
       i += 1;
       continue;
     }
@@ -98,12 +107,34 @@ function buildReviewItem(row) {
   };
 }
 
-function chunkRows(rows, batchSize) {
+function reviewItemChars(item) {
+  return [item.text, item.root_text, item.reply_to_user_name]
+    .map(value => String(value || '').length)
+    .reduce((sum, length) => sum + length, 0);
+}
+
+function splitReviewItems(items, maxItems = DEFAULT_BATCH_SIZE, maxChars = DEFAULT_MAX_CHARS) {
   const chunks = [];
-  for (let index = 0; index < rows.length; index += batchSize) {
-    chunks.push(rows.slice(index, index + batchSize));
+  let current = [];
+  let chars = 0;
+
+  for (const item of items) {
+    const itemChars = reviewItemChars(item);
+    if (current.length && (current.length >= maxItems || chars + itemChars > maxChars)) {
+      chunks.push(current);
+      current = [];
+      chars = 0;
+    }
+    current.push(item);
+    chars += itemChars;
   }
+
+  if (current.length) chunks.push(current);
   return chunks;
+}
+
+function chunkRows(rows, batchSize) {
+  return splitReviewItems(rows, batchSize, Number.POSITIVE_INFINITY);
 }
 
 function buildPrompt(rows) {
@@ -112,11 +143,12 @@ function buildPrompt(rows) {
     '',
     '规则：',
     '1. 只判断当前评论或回复本身的态度。',
-    '2. 二级回复需要结合 root_text 和 reply_to_user_name 理解上下文。',
-    '3. 不要用单个关键词机械判断。',
-    '4. sentiment 只能是：负面、正面、中性。',
-    '5. negative_theme 只在 sentiment=负面 时填写，否则填空字符串。',
-    '6. 输出必须严格符合 JSON schema，是一个 JSON 数组，不要输出 Markdown。',
+    '2. 历史导入没有微博正文；不得推断或补充微博正文。',
+    '3. 二级回复需要结合 root_text 和 reply_to_user_name 理解上下文。',
+    '4. 不要用单个关键词机械判断。',
+    '5. sentiment 只能是：负面、正面、中性。',
+    '6. negative_theme 只在 sentiment=负面 时填写，否则填空字符串。',
+    '7. 输出必须严格符合 JSON schema，是一个 JSON 数组，不要输出 Markdown。',
     '',
     'JSON schema 字段：row_key, sentiment, negative_theme, reason, confidence。',
     '',
@@ -131,12 +163,15 @@ function writeJson(filePath, data) {
 
 function prepareReviewBatches(args) {
   const rows = readJsonl(args.input).map(buildReviewItem).filter(row => row.row_key && row.text);
-  const chunks = chunkRows(rows, args.batchSize);
+  const batchSize = args.batchSize || DEFAULT_BATCH_SIZE;
+  const maxChars = args.maxChars || DEFAULT_MAX_CHARS;
+  const chunks = splitReviewItems(rows, batchSize, maxChars);
   const manifest = {
     input: args.input,
     out_dir: args.outDir,
     total_rows: rows.length,
-    batch_size: args.batchSize,
+    batch_size: batchSize,
+    max_chars: maxChars,
     batch_count: chunks.length,
     batches: []
   };
@@ -201,9 +236,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  DEFAULT_BATCH_SIZE,
+  DEFAULT_MAX_CHARS,
   parseArgs,
   readJsonl,
   buildReviewItem,
+  reviewItemChars,
+  splitReviewItems,
   chunkRows,
   buildPrompt,
   prepareReviewBatches,

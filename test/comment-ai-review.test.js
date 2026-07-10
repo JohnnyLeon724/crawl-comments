@@ -61,6 +61,19 @@ test('chunks review items by requested batch size', () => {
   assert.deepEqual(chunks.map(chunk => chunk.length), [2, 1]);
 });
 
+test('splits review items by both item and character ceilings', () => {
+  const items = [
+    { row_key: 'a', text: '12345' },
+    { row_key: 'b', text: '67890' },
+    { row_key: 'c', text: 'abcde' }
+  ];
+
+  assert.deepEqual(
+    prep.splitReviewItems(items, 2, 10).map(chunk => chunk.map(row => row.row_key)),
+    [['a', 'b'], ['c']]
+  );
+});
+
 test('writes AI review prompt batches and manifest', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-prep-'));
   const input = path.join(dir, 'normalized-comments.jsonl');
@@ -81,6 +94,29 @@ test('writes AI review prompt batches and manifest', () => {
   assert.equal(fs.existsSync(path.join(outDir, 'rows_001.json')), true);
   assert.equal(fs.existsSync(path.join(outDir, 'manifest.json')), true);
   assert.match(fs.readFileSync(path.join(outDir, 'prompt_001.txt'), 'utf8'), /JSON schema/);
+});
+
+test('records the character ceiling and keeps reply context in review prompts', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-context-'));
+  const input = path.join(dir, 'normalized-comments.jsonl');
+  const outDir = path.join(dir, 'ai-review-input');
+  fs.writeFileSync(input, JSON.stringify({
+    row_key: 'reply',
+    row_type: 'level2',
+    user_name: '用户B',
+    text: '确实没修好',
+    root_text: '电视坏了',
+    reply_to_user_name: '用户A'
+  }));
+
+  prep.prepareReviewBatches({ input, outDir, batchSize: 80, maxChars: 24000 });
+
+  const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'manifest.json'), 'utf8'));
+  const prompt = fs.readFileSync(path.join(outDir, 'prompt_001.txt'), 'utf8');
+  assert.equal(manifest.max_chars, 24000);
+  assert.match(prompt, /历史导入没有微博正文/);
+  assert.match(prompt, /root_text/);
+  assert.match(prompt, /reply_to_user_name/);
 });
 
 test('builds Codex CLI command arguments for a review batch', () => {
@@ -129,4 +165,23 @@ test('uses a generated strict schema for model review commands', () => {
   assert.equal(fs.existsSync(strictSchemaPath), true);
   assert.equal(result.modelSchemaPath, strictSchemaPath);
   assert.equal(result.results[0].command.args.includes(strictSchemaPath), true);
+});
+
+test('resume mode skips only a complete review output', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-resume-'));
+  const rowsFile = path.join(dir, 'rows_001.json');
+  const promptFile = path.join(dir, 'prompt_001.txt');
+  const outputFile = path.join(dir, 'review_001.json');
+  const batch = { rows_file: rowsFile, prompt_file: promptFile, output_file: outputFile };
+
+  fs.writeFileSync(rowsFile, JSON.stringify([{ row_key: 'a' }]));
+  fs.writeFileSync(promptFile, 'review');
+  fs.writeFileSync(outputFile, JSON.stringify([{ row_key: 'a' }]));
+  assert.equal(runner.isCompleteReviewOutput(batch), true);
+
+  fs.writeFileSync(outputFile, JSON.stringify([{ row_key: 'a' }, { row_key: 'a' }]));
+  assert.equal(runner.isCompleteReviewOutput(batch), false);
+
+  fs.writeFileSync(outputFile, JSON.stringify([{ row_key: 'b' }]));
+  assert.equal(runner.isCompleteReviewOutput(batch), false);
 });

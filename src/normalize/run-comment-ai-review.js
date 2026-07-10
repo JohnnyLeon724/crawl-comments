@@ -22,6 +22,7 @@ function printUsage() {
   --schema      可选，输出 schema 路径
   --cwd         可选，Codex 执行工作目录，默认当前目录
   --dry-run     可选，只打印命令，不调用模型
+  --resume      可选，只跳过 row_key 集合完整匹配的已有输出
   --help        查看帮助
 `.trim());
 }
@@ -41,6 +42,7 @@ function parseArgs(argv) {
     schemaPath: path.join(process.cwd(), 'schemas/comment-ai-review.schema.json'),
     cwd: process.cwd(),
     dryRun: false,
+    resume: false,
     help: false
   };
 
@@ -54,6 +56,11 @@ function parseArgs(argv) {
 
     if (token === '--dry-run') {
       args.dryRun = true;
+      continue;
+    }
+
+    if (token === '--resume') {
+      args.resume = true;
       continue;
     }
 
@@ -152,12 +159,42 @@ function runOneBatch(batch, options) {
   };
 }
 
+function readJsonArray(filePath) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function isCompleteReviewOutput(batch) {
+  const inputRows = readJsonArray(batch.rows_file);
+  const outputRows = readJsonArray(batch.output_file);
+  if (!inputRows || !outputRows) return false;
+
+  const expectedKeys = inputRows.map(row => String(row?.row_key || ''));
+  const actualKeys = outputRows.map(row => String(row?.row_key || ''));
+  if (expectedKeys.some(key => !key) || actualKeys.some(key => !key)) return false;
+  if (new Set(expectedKeys).size !== expectedKeys.length) return false;
+  if (new Set(actualKeys).size !== actualKeys.length) return false;
+  if (expectedKeys.length !== actualKeys.length) return false;
+
+  const expected = new Set(expectedKeys);
+  return actualKeys.every(key => expected.has(key));
+}
+
 function runReviewBatches(args) {
   const manifest = readManifest(args.inputDir);
   const modelSchemaPath = path.join(args.inputDir, 'model-output-schema.json');
   writeModelOutputSchema(args.schemaPath, modelSchemaPath);
   const modelOptions = Object.assign({}, args, { schemaPath: modelSchemaPath });
-  const results = manifest.batches.map(batch => runOneBatch(batch, modelOptions));
+  const results = manifest.batches.map(batch => {
+    if (args.resume && isCompleteReviewOutput(batch)) {
+      return { status: 'skipped', outputFile: batch.output_file };
+    }
+    return runOneBatch(batch, modelOptions);
+  });
   const failedCount = results.filter(result => result.status === 'failed').length;
 
   return {
@@ -210,6 +247,7 @@ module.exports = {
   readManifest,
   buildCodexExecCommand,
   runOneBatch,
+  isCompleteReviewOutput,
   runReviewBatches,
   main
 };
