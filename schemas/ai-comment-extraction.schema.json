@@ -20,7 +20,7 @@
     },
     "platform": {
       "type": "string",
-      "enum": ["douyin", "xiaohongshu", "unknown"]
+      "enum": ["douyin", "xiaohongshu", "weibo", "unknown"]
     },
     "rows": {
       "type": "array",

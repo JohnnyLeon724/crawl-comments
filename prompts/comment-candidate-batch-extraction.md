@@ -53,6 +53,7 @@
 - `source_chunk_id` 必须填写输入里的 `candidate_id`，不要填写 DOM path、candidate_hash 或批次号。
 - `candidate_hash` 只用于去重追踪，不要写入输出 JSON。
 - 输入文件的 `batch_id` 是当前批次标识。当前 `ai-comment-extraction-v1` schema 不允许在 row 中新增 `source_batch_id` 字段；后续归一化脚本会根据文件路径或 batch 元数据把 `source_batch_id` 写入内部 raw 信息。
+- source_comment_id、父评论 ID、根评论 ID、作者 UID href、时间、回复/根上下文和复合指纹均由 DOM 证据回填，禁止模型推测、输出或补全。
 - 如果一个 `candidate_id` 中同时包含一级评论和二级回复，可以拆成多条 `rows`，但每条都必须使用同一个 `source_chunk_id`，并在 `evidence` 中保留对应原文片段。
 
 ## 提取规则
@@ -93,6 +94,12 @@
 
 ```text
 用户名 + 正文 + 置顶评论/作者 + 04-04 + 上海 + 点赞数 + 回复 + 展开 N 条
+```
+
+微博常见粘连形态：
+
+```text
+用户名 + 评论正文 + 7月10日 + 回复 + 点赞 + 展开更多回复
 ```
 
 优先使用 `inner_text` 做字段拆分；当 `inner_text` 粘连严重时，可参考 `html`、`nearby_buttons`、`role_hint` 和 `rect` 判断层级与字段边界。

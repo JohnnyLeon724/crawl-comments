@@ -20,6 +20,7 @@ test('AI comment extraction schema defines extraction envelope', () => {
   }
 
   assert.equal(schema.properties.schema_version.const, 'ai-comment-extraction-v1');
+  assert.equal(schema.properties.platform.enum.includes('weibo'), true);
 });
 
 test('AI comment extraction rows preserve comment structure and source chunk', () => {
