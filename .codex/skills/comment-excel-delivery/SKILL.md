@@ -43,6 +43,19 @@ Weibo comment collection is Chrome/model-only. `chrome:control-chrome` and model
 5. Generate `model-output-schema.json` from the canonical extraction schema before each local Codex invocation so the strict model schema is compatible. The model may extract fields from candidates, but cannot invent IDs, browse URLs, click controls, or change sort state.
 6. On login, CAPTCHA, verification, access limits, ambiguous profile scope, failed sort verification, or incomplete reply expansion, stop and retain the scoped evidence as `partial` or `failed`. Ask the user to resolve access checks; do not bypass them.
 
+## Weibo Historical Semantic Delivery
+
+`docs/weibo_comments_all.xlsx` is a **历史导入** input for analysis of already delivered Weibo comments. It is not a replacement for Chrome/model-only collection and must stay isolated from a live Chrome project such as `output/weibo_Qz3Tr1mPS_dual_sort_test/`; do not use historical rows to fill a live task's declared comment count or `partial` gap.
+
+1. Import only the workbook's `微博汇总` and `评论明细` sheets with `src/pipeline/import_weibo_comment_history.py`. Keep original phase, post link, floor/reply context, author, time and engagement fields, but do not fabricate comment IDs.
+2. This input has no post body. **不补读历史微博正文**: do not call Chrome, MCP, API, OpenCLI, CDP, or another source to retrieve it. The `按帖子楼层展示` sheet groups by creator, link, phase and engagement count instead of rendering a post body.
+3. Prepare automatic model-capacity batches with `script/prepare-comment-ai-review.js` using both limits: 80 records and 24,000 characters. These review batches are context limits, not additional capture batches.
+4. Run local Codex review with `script/run-comment-ai-review.js --resume`, then require one valid output for every imported `row_key` through `script/validate-comment-ai-review.js`. Only the current comment/reply receives a label; replies include root-comment and reply-target context.
+5. Generate a stratified review sample with `script/build-comment-qa-sample.js`, then generate the five-sheet formal workbook with `script/build-weibo-history-semantic-report.mjs`. The builder uses Artifact Tool and refuses `delivery.xlsx` unless semantic QA is `ok`.
+6. The formal output directory is `output/weibo_historical_comment_semantic_2026-07-10/`. Retain `history-import-summary.json`, `ai-review-input/`, `semantic-qa-summary.json`, `qa-sample.jsonl`, `delivery.xlsx`, and the five previews for audit.
+
+There is no MCP/API fallback for Weibo comment collection. Historical import is a local workbook-analysis path only; it does not authorize any API or browser retrieval of missing live or post-body data.
+
 ## Expected Outputs
 
 - `crawl-tasks.json`

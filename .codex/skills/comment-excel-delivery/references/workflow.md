@@ -21,6 +21,51 @@ python src/pipeline/import_bilibili_delivery.py \
   --out-dir output/<project_id>
 ```
 
+### Historical Weibo semantic delivery
+
+`docs/weibo_comments_all.xlsx` is a **历史导入** source for a standalone Weibo semantic report. It uses only the `微博汇总` and `评论明细` worksheets. Do not merge it with `output/weibo_Qz3Tr1mPS_dual_sort_test/` or use it to make a Chrome `partial` collection appear complete.
+
+The history workbook does not contain post bodies. **不补读历史微博正文**: do not open Chrome, use MCP/CDP, call an API/OpenCLI endpoint, or use another source to retrieve missing post text. In `按帖子楼层展示`, show the grouping title (creator, link, phase, engagement) once per post rather than a fabricated post body. This rule does not weaken the separate Chrome/model-only rule for new Weibo comment collection: there is no MCP/API fallback for Weibo comments.
+
+Run the full historical analysis in this order:
+
+```bash
+uv run --project src/pipeline python src/pipeline/import_weibo_comment_history.py \
+  --input docs/weibo_comments_all.xlsx \
+  --out-dir output/weibo_historical_comment_semantic_2026-07-10
+
+node script/prepare-comment-ai-review.js \
+  --input output/weibo_historical_comment_semantic_2026-07-10/all-normalized-comments.jsonl \
+  --out-dir output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --batch-size 80 \
+  --max-chars 24000
+
+node script/run-comment-ai-review.js \
+  --input-dir output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --cwd /Users/gyp/Documents/demo \
+  --resume
+
+node script/validate-comment-ai-review.js \
+  --comments output/weibo_historical_comment_semantic_2026-07-10/all-normalized-comments.jsonl \
+  --ai-review output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --out output/weibo_historical_comment_semantic_2026-07-10/semantic-qa-summary.json
+
+node script/build-comment-qa-sample.js \
+  --comments output/weibo_historical_comment_semantic_2026-07-10/all-normalized-comments.jsonl \
+  --ai-review output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --sample-size 60 \
+  --out output/weibo_historical_comment_semantic_2026-07-10/qa-sample.jsonl
+
+/Users/gyp/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  script/build-weibo-history-semantic-report.mjs \
+  --comments output/weibo_historical_comment_semantic_2026-07-10/all-normalized-comments.jsonl \
+  --ai-review output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --qa output/weibo_historical_comment_semantic_2026-07-10/semantic-qa-summary.json \
+  --out output/weibo_historical_comment_semantic_2026-07-10/delivery.xlsx
+```
+
+The 80-record/24,000-character bounds are automatic model-context limits, not manually managed capture batches. `run-comment-ai-review.js --resume` skips only review files that have a complete matching `row_key` set. Generate the formal workbook only when `semantic-qa-summary.json` is `ok`, input and review counts match, the error count is zero, and `qa-sample.jsonl` contains 60 rows (or all available rows when fewer). Use Artifact Tool for the workbook and render each of `总结`, `按帖子楼层展示`, `负面评论`, `正面评论`, and `全部评论语义明细` before handoff.
+
 ## 2. Delivery Mode And Completion Gate
 
 Default delivery mode is full completion. Do not use smoke limits in default delivery mode, and do not stop the project just because one browser pass reached `maxBatches`, `maxRounds`, or `maxRuntimeMs`.

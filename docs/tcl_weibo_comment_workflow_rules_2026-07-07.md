@@ -240,6 +240,51 @@ Excel 摘要里不写入：
 5. 负面行标红，正面行标绿。
 6. 保留评论时间、评论人、回复给、点赞数、情感、负面主题、语义依据等业务可读字段。
 
+### 7.1 历史导入评论的例外边界
+
+`docs/weibo_comments_all.xlsx` 是既有评论的 **历史导入** 分析输入，只读取 `微博汇总` 与 `评论明细`，不替代第 5 节的 Chrome/model-only 新评论采集。它必须和 Chrome `partial` 项目隔离，不能用历史评论补齐页面展示评论数、双排序覆盖率或任何实时采集缺口。
+
+历史输入没有微博正文，因此 **不补读历史微博正文**：不得为了报表调用 Chrome、MCP/CDP、评论接口、OpenCLI 或任何其他来源补读正文。历史项目的 `按帖子楼层展示` 以博主、微博链接、阶段、互动量为每条微博的单次分组标题，随后按原始楼层连续展示一级评论和 `↳` 二级回复；不显示或编造正文。微博评论仍然没有 MCP/API fallback。
+
+历史分析执行顺序如下：
+
+```bash
+uv run --project src/pipeline python src/pipeline/import_weibo_comment_history.py \
+  --input docs/weibo_comments_all.xlsx \
+  --out-dir output/weibo_historical_comment_semantic_2026-07-10
+
+node script/prepare-comment-ai-review.js \
+  --input output/weibo_historical_comment_semantic_2026-07-10/all-normalized-comments.jsonl \
+  --out-dir output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --batch-size 80 \
+  --max-chars 24000
+
+node script/run-comment-ai-review.js \
+  --input-dir output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --cwd /Users/gyp/Documents/demo \
+  --resume
+
+node script/validate-comment-ai-review.js \
+  --comments output/weibo_historical_comment_semantic_2026-07-10/all-normalized-comments.jsonl \
+  --ai-review output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --out output/weibo_historical_comment_semantic_2026-07-10/semantic-qa-summary.json
+
+node script/build-comment-qa-sample.js \
+  --comments output/weibo_historical_comment_semantic_2026-07-10/all-normalized-comments.jsonl \
+  --ai-review output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --sample-size 60 \
+  --out output/weibo_historical_comment_semantic_2026-07-10/qa-sample.jsonl
+
+/Users/gyp/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node \
+  script/build-weibo-history-semantic-report.mjs \
+  --comments output/weibo_historical_comment_semantic_2026-07-10/all-normalized-comments.jsonl \
+  --ai-review output/weibo_historical_comment_semantic_2026-07-10/ai-review-input \
+  --qa output/weibo_historical_comment_semantic_2026-07-10/semantic-qa-summary.json \
+  --out output/weibo_historical_comment_semantic_2026-07-10/delivery.xlsx
+```
+
+模型审阅批次同时受 80 条和 24,000 字符限制，只用于上下文容量控制。`--resume` 只跳过 `row_key` 集合完整匹配的已完成输出。只有导入、严格审阅校验、60 条（或数据不足时全部）的抽样 QA 均完成，且 `semantic-qa-summary.json` 为 `ok` 时，才可由 Artifact Tool 生成五表 `delivery.xlsx` 并逐表渲染检查。
+
 ## 8. 语义模型调用方式
 
 语义判定通过 Codex CLI 执行，并用 JSON schema 限制输出结构。

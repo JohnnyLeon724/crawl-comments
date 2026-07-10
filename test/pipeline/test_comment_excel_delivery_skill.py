@@ -223,6 +223,29 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
         self.assertNotIn("buildComments", weibo_rules)
         self.assertNotIn("OpenCLI 评论接口", weibo_rules)
 
+    def test_historical_weibo_semantic_delivery_contract_is_documented(self):
+        skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+        weibo_rules = (ROOT / "docs" / "tcl_weibo_comment_workflow_rules_2026-07-07.md").read_text(
+            encoding="utf-8"
+        )
+
+        for document in [skill, workflow, weibo_rules]:
+            for text in [
+                "weibo_comments_all.xlsx",
+                "import_weibo_comment_history.py",
+                "validate-comment-ai-review.js",
+                "build-weibo-history-semantic-report.mjs",
+                "历史导入",
+                "按帖子楼层展示",
+                "不补读历史微博正文",
+            ]:
+                self.assertIn(text, document)
+
+        self.assertIn("no MCP/API fallback", skill)
+        self.assertIn("no MCP/API fallback", workflow)
+        self.assertIn("MCP/API fallback", weibo_rules)
+
 
 if __name__ == "__main__":
     unittest.main()
