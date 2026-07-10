@@ -106,3 +106,27 @@ test('builds Codex CLI command arguments for a review batch', () => {
     '-'
   ]);
 });
+
+test('uses a generated strict schema for model review commands', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-review-model-schema-'));
+  const inputDir = path.join(dir, 'input');
+  fs.mkdirSync(inputDir);
+  const promptFile = path.join(inputDir, 'prompt_001.txt');
+  fs.writeFileSync(promptFile, 'review these comments');
+  fs.writeFileSync(path.join(inputDir, 'manifest.json'), JSON.stringify({
+    batches: [{ prompt_file: promptFile, output_file: path.join(inputDir, 'review_001.json') }]
+  }));
+
+  const result = runner.runReviewBatches({
+    inputDir,
+    codexBin: '/tmp/codex',
+    cwd: dir,
+    schemaPath: path.join(__dirname, '..', 'schemas', 'comment-ai-review.schema.json'),
+    dryRun: true
+  });
+
+  const strictSchemaPath = path.join(inputDir, 'model-output-schema.json');
+  assert.equal(fs.existsSync(strictSchemaPath), true);
+  assert.equal(result.modelSchemaPath, strictSchemaPath);
+  assert.equal(result.results[0].command.args.includes(strictSchemaPath), true);
+});

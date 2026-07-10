@@ -4,8 +4,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { writeModelOutputSchema } = require('./model-output-schema.js');
 
-const DEFAULT_CODEX_BIN = '/Applications/Codex.app/Contents/Resources/codex';
+const DEFAULT_CODEX_BIN = [
+  '/Applications/Codex.app/Contents/Resources/codex',
+  '/Applications/ChatGPT.app/Contents/Resources/codex'
+].find(fs.existsSync) || '/Applications/Codex.app/Contents/Resources/codex';
 
 function printUsage() {
   console.log(`
@@ -150,12 +154,16 @@ function runOneBatch(batch, options) {
 
 function runReviewBatches(args) {
   const manifest = readManifest(args.inputDir);
-  const results = manifest.batches.map(batch => runOneBatch(batch, args));
+  const modelSchemaPath = path.join(args.inputDir, 'model-output-schema.json');
+  writeModelOutputSchema(args.schemaPath, modelSchemaPath);
+  const modelOptions = Object.assign({}, args, { schemaPath: modelSchemaPath });
+  const results = manifest.batches.map(batch => runOneBatch(batch, modelOptions));
   const failedCount = results.filter(result => result.status === 'failed').length;
 
   return {
     status: failedCount > 0 ? 'failed' : 'success',
     inputDir: args.inputDir,
+    modelSchemaPath,
     batchCount: results.length,
     failedCount,
     results
