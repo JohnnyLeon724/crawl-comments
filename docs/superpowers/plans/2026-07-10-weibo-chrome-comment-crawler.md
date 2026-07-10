@@ -4,7 +4,7 @@
 
 **Goal:** Replace the TCL Weibo comment API crawler with a Chrome-plugin-only, DOM-evidence-backed, model-structured comment pipeline that preserves hot/time sorting and safely expanded replies.
 
-**Architecture:** A validated, runtime Weibo profile supplies the only selectors and DOM identity attributes used by the Chrome capture helpers. Capture windows are evidence batches; a new deterministic preparation step deduplicates and repacks them into bounded model batches. The model extracts visible text fields only, while the normalizer writes comment IDs and reply relationships from DOM evidence. QA evaluates each sort stream separately and treats unsafe or incomplete capture as `partial`.
+**Architecture:** A validated, runtime Weibo profile supplies the only selectors and DOM identity evidence used by the Chrome capture helpers. Capture windows are evidence batches; a new deterministic preparation step deduplicates and repacks them into bounded model batches. DOM IDs are preferred; when unavailable, code builds a composite fingerprint from public author UID `href`, normalized text, timestamp, and reply/root context. The model extracts visible text fields only and never supplies identity; the normalizer writes DOM IDs or retains the composite evidence. QA evaluates each sort stream separately and forces composite-fingerprint tasks to `partial`.
 
 **Tech Stack:** Node.js built-in test runner, JSON Schema Draft 2020-12, Codex CLI strict output schemas, Python `unittest`, `chrome:control-chrome`, existing JSONL/Excel pipeline.
 
@@ -15,7 +15,8 @@
 - Chrome reads only the unique, visible comment scope and public DOM attributes. Login, CAPTCHA, verification, or access restrictions pause for user action.
 - Collect both exact UI sort modes: `hot` (`按热度`) and `time` (`按时间`). A missing or unverifiable sort mode yields `partial`.
 - Expand replies only with exact labels inside the verified comment root; never click `收起`, `展开全文`, `商品`, `详情`, or a generic `回复` action.
-- A stable DOM `source_comment_id` is mandatory for cross-sort completion. Text fingerprints may suppress duplicate candidates but may not produce an `ok` completion state.
+- Two identity modes are allowed. Preferred `dom_id` reads `source_comment_id` (and available parent/root IDs) from public DOM evidence and may produce `ok`. Fallback `composite_fingerprint` deterministically combines public author UID `href`, normalized text, timestamp, reply context, and root context; it may merge/recover candidates but is always `partial` and must never claim dual-sort all-complete.
+- The model may neither invent nor fill a comment ID, parent/root ID, author UID `href`, timestamp, context field, or composite fingerprint. Identity evidence comes only from the validated DOM scope.
 - Browser evidence batches and model batches are distinct. Use at most 80 unique candidates or 24,000 candidate-text characters per model batch, whichever arrives first.
 - Keep `comment-dom-batch-v1` and `ai-comment-extraction-v1` artifact names. Extend their JSON schemas additively; do not create a second raw-comment format.
 - Preserve canonical project schemas. Every Codex CLI invocation receives a generated strict clone from `src/normalize/model-output-schema.js`.
@@ -26,10 +27,10 @@
 
 ## File Structure
 
-- Create `schemas/weibo-comment-profile.schema.json`: validates the explicit selectors, sort controls, end texts, safe reply labels, and DOM identity attributes discovered on real pages.
+- Create `schemas/weibo-comment-profile.schema.json`: validates the explicit selectors, sort controls, end texts, safe reply labels, optional preferred DOM-ID attributes, and required composite-fingerprint evidence selectors discovered on real pages.
 - Create `src/browser/weibo-comment-profile.js` and `script/validate-weibo-comment-profile.js`: load and validate profile files without guessing selectors.
 - Modify `src/browser/chrome-comment-capture.js`: preserve DOM IDs, capture stream state, switch verified sort controls, and write capture evidence batches.
-- Modify `schemas/comment-dom-batch.schema.json`: support `weibo`, `capture`/`model` batch kinds, sort mode, source identity, and evidence origins.
+- Modify `schemas/comment-dom-batch.schema.json`: support `weibo`, `capture`/`model` batch kinds, sort mode, DOM-ID or composite-fingerprint source evidence, and evidence origins.
 - Create `src/normalize/prepare-comment-extraction-batches.js` and `script/prepare-comment-extraction-batches.js`: merge capture evidence into bounded model input batches.
 - Create `src/normalize/run-comment-ai-extraction.js` and `script/run-comment-ai-extraction.js`: invoke Codex once per model batch with a generated strict schema.
 - Create `src/adapters/weibo.js`: canonicalize Weibo URLs and extract a stable post identifier.
@@ -50,7 +51,7 @@
 **Interfaces:**
 - Consumes: a JSON profile created from a logged-in, visible Weibo detail page.
 - Produces: `readWeiboCommentProfile(filePath): WeiboCommentProfile`, which either returns a fully validated profile or throws one error containing every missing/invalid field.
-- Produces: a profile object with `postRootSelector`, `commentRootSelector`, `commentItemSelector`, `replyContainerSelector`, `scrollContainerSelector`, `sortScopeSelector`, `sorts`, `endTexts`, `safeReplyExpandPatterns`, and `identityAttributes`.
+- Produces: a profile object with `identityMode`, `postRootSelector`, `commentRootSelector`, `commentItemSelector`, `replyContainerSelector`, `scrollContainerSelector`, `sortScopeSelector`, `sorts`, `endTexts`, `safeReplyExpandPatterns`, and `identityAttributes`. `identityMode` is exactly `dom_id` or `composite`; `compositeIdentity` is optional for `dom_id` and required for `composite`.
 
 - [ ] **Step 1: Write the failing profile-contract test**
 
@@ -63,6 +64,7 @@ const profile = require('../src/browser/weibo-comment-profile.js');
 
 const validProfile = {
   platform: 'weibo',
+  identityMode: 'dom_id',
   postRootSelector: 'article[data-post-root]',
   commentRootSelector: 'section[data-comment-root]',
   commentItemSelector: 'article[data-comment-id]',
@@ -97,6 +99,18 @@ test('rejects profiles that would force broad DOM discovery or ambiguous sorting
     'identityAttributes.comment must contain at least one attribute'
   ]);
 });
+
+test('accepts a composite-fingerprint fallback when public DOM IDs are absent', () => {
+  const fallback = structuredClone(validProfile);
+  fallback.identityMode = 'composite';
+  fallback.identityAttributes = { comment: [], parent: [], root: [] };
+  fallback.compositeIdentity = {
+    authorHrefSelector: 'a[href^="/u/"]',
+    commentTextSelector: '.comment-text',
+    timestampSelector: '.from'
+  };
+  assert.deepEqual(profile.validateWeiboCommentProfile(fallback), []);
+});
 ```
 
 Add a `test/project-structure.test.js` wrapper pair assertion for `src/browser/weibo-comment-profile.js` and `script/validate-weibo-comment-profile.js`.
@@ -113,7 +127,7 @@ Expected: FAIL because `src/browser/weibo-comment-profile.js` and the wrapper do
 
 - [ ] **Step 3: Implement the schema, validator, and CLI wrapper**
 
-Create the schema with `additionalProperties: false`. Require the profile fields from the interface block; require both `sorts.hot` and `sorts.time`, require their non-empty exact labels, and require at least one comment identity attribute.
+Create the schema with `additionalProperties: false`. Require the profile fields from the interface block, including `identityMode` and `identityAttributes`; require both `sorts.hot` and `sorts.time` and their non-empty exact labels. `identityMode` must be `dom_id` or `composite`. In `dom_id` mode, `identityAttributes.comment` must contain at least one attribute and `compositeIdentity` is optional. In `composite` mode, `identityAttributes.comment` may be empty and `compositeIdentity` is required with exactly the non-empty selectors `authorHrefSelector`, `commentTextSelector`, and `timestampSelector`. Do not add reply/root-context selectors to the profile: those contexts are derived inside the existing verified reply/root DOM scope.
 
 In `src/browser/weibo-comment-profile.js`, implement these exported functions:
 
@@ -132,8 +146,19 @@ function validateWeiboCommentProfile(value) {
       errors.push(`sorts.${mode}.label is required`);
     }
   }
-  if (!Array.isArray(value?.identityAttributes?.comment) || !value.identityAttributes.comment.length) {
+  const identityMode = value?.identityMode;
+  if (!['dom_id', 'composite'].includes(identityMode)) {
+    errors.push('identityMode must be one of: dom_id, composite');
+  }
+  if (identityMode === 'dom_id' && !value?.identityAttributes?.comment?.length) {
     errors.push('identityAttributes.comment must contain at least one attribute');
+  }
+  if (identityMode === 'composite') {
+    for (const name of ['authorHrefSelector', 'commentTextSelector', 'timestampSelector']) {
+      if (!String(value?.compositeIdentity?.[name] || '').trim()) {
+        errors.push(`compositeIdentity.${name} is required`);
+      }
+    }
   }
   return errors;
 }
@@ -150,14 +175,14 @@ function readWeiboCommentProfile(filePath) {
 
 - [ ] **Step 4: Capture and validate real-page evidence through Chrome**
 
-Using `chrome:control-chrome`, inspect three logged-in Weibo detail pages: one low-comment page, one page with visible replies, and one long-text/image/video page. Create `output/weibo-profile-probe/weibo-comment-profile.json` from selectors and DOM identity attributes observed in all three pages, then run:
+Using `chrome:control-chrome`, inspect three logged-in Weibo detail pages: one low-comment page, one page with visible replies, and one long-text/image/video page. Create `output/weibo-profile-probe/weibo-comment-profile.json` from selectors, `identityMode`, `identityAttributes`, and—only when `identityMode` is `composite`—the three `compositeIdentity` selectors observed in all three pages, then run:
 
 ```bash
 node script/validate-weibo-comment-profile.js \
   --profile output/weibo-profile-probe/weibo-comment-profile.json
 ```
 
-For each selector in the profile, confirm through the Chrome tab that the post root, comment root, sort scope, and scroll container each count exactly one; comment items count at least one; both sort labels are visible; and one level-1 plus one level-2 item exposes a stable comment identity. Save one screenshot and the read-only observation JSON per page under `output/weibo-profile-probe/`. Stop the plan if any check fails; do not substitute an API source or a guessed selector.
+For each selector in the profile, confirm through the Chrome tab that the post root, comment root, sort scope, and scroll container each count exactly one; comment items count at least one; and both sort labels are visible. For one level-1 and one level-2 item, record either stable DOM-ID evidence or all five composite inputs: public author UID `href`, normalized text source, timestamp, reply context, and root context. The first three come only from `compositeIdentity`; reply/root context are derived within the existing verified reply/root DOM scope. A level-1 item may have an empty reply context but must retain its root text; a level-2 item missing required reply or root context is incomplete and `partial`. Save one screenshot and the read-only observation JSON per page under `output/weibo-profile-probe/`, including the selected identity mode. Stop the plan if selector scope or both identity modes fail; an available composite-only profile may proceed, but its pilot is permanently `partial`. Do not substitute an API source or a guessed selector.
 
 - [ ] **Step 5: Run the profile tests and verify GREEN**
 
@@ -178,7 +203,7 @@ git add schemas/weibo-comment-profile.schema.json src/browser/weibo-comment-prof
 git commit -m "feat(weibo): define chrome comment profile contract"
 ```
 
-## Task 2: Preserve DOM Identity And Per-Sort Capture State
+## Task 2: Preserve Evidence Identity And Per-Sort Capture State
 
 **Files:**
 - Modify: `src/browser/chrome-comment-capture.js`
@@ -188,7 +213,7 @@ git commit -m "feat(weibo): define chrome comment profile contract"
 
 **Interfaces:**
 - Consumes: a validated `WeiboCommentProfile` passed as the existing explicit profile argument.
-- Produces: candidates with `capture_sort_mode`, `source_comment_id`, `source_parent_comment_id`, `source_root_comment_id`, and `source_capture_batch_ids`.
+- Produces: candidates with `capture_sort_mode`, `identity_mode`, `source_comment_id`, `source_parent_comment_id`, `source_root_comment_id`, `source_composite_fingerprint`, its five public DOM inputs, and `source_capture_batch_ids`.
 - Produces: `capture-state.json` with `streams.hot` and `streams.time`; existing scalar state fields remain for compatibility.
 
 - [ ] **Step 1: Write failing capture and schema tests**
@@ -212,6 +237,22 @@ test('preserves deterministic Weibo DOM identity instead of inventing an AI iden
   assert.equal(candidate.capture_sort_mode, 'time');
 });
 
+test('uses the complete DOM composite fingerprint when Weibo exposes no comment ID', () => {
+  const candidate = capture.toCommentCandidate({
+    source_author_uid_href: '/u/123',
+    source_comment_text: '  用户A 评论正文  ',
+    source_comment_timestamp: '7-10 10:30',
+    source_reply_context: '回复 用户B',
+    source_root_context: '根评论正文',
+    source_composite_fingerprint: 'sha256:example',
+    capture_sort_mode: 'hot'
+  });
+  assert.equal(candidate.identity_mode, 'composite_fingerprint');
+  assert.equal(candidate.source_comment_id, '');
+  assert.equal(candidate.source_composite_fingerprint, 'sha256:example');
+  assert.equal(candidate.source_author_uid_href, '/u/123');
+});
+
 test('records completed hot and time stream observations', () => {
   const state = capture.buildCaptureState({
     platform: 'weibo',
@@ -225,7 +266,7 @@ test('records completed hot and time stream observations', () => {
 });
 ```
 
-Extend `test/comment-dom-batch-schema.test.js` to expect `weibo` in the platform enum, top-level optional `batch_kind`, and each candidate's optional identity/sort fields.
+Extend `test/comment-dom-batch-schema.test.js` to expect `weibo` in the platform enum, top-level optional `batch_kind`, and each candidate's optional DOM-ID/composite-fingerprint identity and sort fields. Add a schema rejection case for `identity_mode: 'composite_fingerprint'` lacking any one of its five public evidence inputs or `source_composite_fingerprint`.
 
 - [ ] **Step 2: Run the capture tests and verify RED**
 
@@ -235,20 +276,22 @@ Run:
 node --test test/chrome-comment-capture.test.js test/comment-dom-batch-schema.test.js
 ```
 
-Expected: FAIL because candidate identity fields and `streams` are absent.
+Expected: FAIL because candidate DOM-ID/composite-fingerprint fields and `streams` are absent.
 
 - [ ] **Step 3: Implement additive candidate and state fields**
 
-In `toCommentCandidate`, copy only normalized string values for the new identity fields and set a stable candidate ID when `source_comment_id` exists:
+In `toCommentCandidate`, copy only normalized string values for the new evidence fields and set a stable candidate ID when a DOM ID or complete composite fingerprint exists:
 
 ```js
 const sourceCommentId = normalizeControlText(safeRaw.source_comment_id);
 const candidateId = sourceCommentId
   ? `weibo:${sourceCommentId}`
-  : (safeRaw.candidate_id || `candidate_${String(index).padStart(6, '0')}`);
+  : (safeRaw.source_composite_fingerprint
+    ? `weibo:fp:${safeRaw.source_composite_fingerprint}`
+    : (safeRaw.candidate_id || `candidate_${String(index).padStart(6, '0')}`));
 ```
 
-Extend `inspectCommentRoot` so the supplied profile's `identityAttributes` are read from the comment item and its nearest reply/root ancestor. It must return empty strings when attributes do not exist. Do not derive IDs from text or ask the model to fill them.
+Extend `inspectCommentRoot` so the supplied profile's `identityAttributes` are read from the comment item and its nearest reply/root ancestor. For a `profile.identityMode === 'composite'`, read only `profile.compositeIdentity.authorHrefSelector`, `commentTextSelector`, and `timestampSelector` below the verified comment item; do not create other profile selector fields. Deterministically construct `source_composite_fingerprint` from those three public values plus reply context and root context derived inside the existing scoped reply/root DOM. A level-1 candidate may use an empty reply context but must retain non-empty root text; a level-2 candidate missing required reply or root context is incomplete. Mark the candidate `dom_id` only when its DOM ID is present; otherwise mark it `composite_fingerprint` only when all required evidence is present. If neither mode is complete, do not invent an identity-bearing candidate and record `missing_identity_evidence` as a `partial` capture reason. Never derive a comment ID from text or ask the model to fill any identity field.
 
 Add a `normalizeStreamState` helper and include this immutable shape under `buildCaptureState(...).streams`:
 
@@ -259,7 +302,7 @@ Add a `normalizeStreamState` helper and include this immutable shape under `buil
 }
 ```
 
-In the batch schema, add optional `batch_kind` with enum `['capture', 'model']` and set capture batches to `capture`; add the candidate fields named in the interface. Retain all previous required properties and the v1 schema version.
+In the batch schema, add optional `batch_kind` with enum `['capture', 'model']` and set capture batches to `capture`; add `identity_mode` (`dom_id` or `composite_fingerprint`) and the candidate fields named in the interface. Require `source_comment_id` for `dom_id`; require all five public inputs and `source_composite_fingerprint` for `composite_fingerprint`. Retain all previous required properties and the v1 schema version.
 
 - [ ] **Step 4: Run the capture tests and verify GREEN**
 
@@ -352,7 +395,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Manually verify one dual-sort task in Chrome**
 
-Use a profile from Task 1 to capture one Weibo detail page. Verify that the two `streams` objects have distinct `verified` flags and that all `capture` batches contain only candidates from the expected comment root. Finalize the task tab after capture.
+Use a profile from Task 1 to capture one Weibo detail page. Verify that the two `streams` objects have distinct `verified` flags and that all `capture` batches contain only candidates from the expected comment root. Record the observed identity mode: DOM-ID evidence may continue toward `ok`; composite-only evidence must be carried forward as `partial`, even if both streams stop at page end. Finalize the task tab after capture.
 
 - [ ] **Step 6: Commit Task 3**
 
@@ -392,7 +435,7 @@ assert.equal(batch.batch_kind, 'model');
 assert.deepEqual(batch.candidates[0].source_capture_batch_ids.sort(), ['capture_hot_001', 'capture_time_001']);
 ```
 
-Add a second test with three long candidates proving that a candidate which would exceed `maxTextChars` starts the next model batch. Add a QA test proving that capture batches are not reported as missing `ai-comment-extraction.json`, while model batches are.
+Add a second duplicate fixture with no `source_comment_id` but the same complete `source_composite_fingerprint` in both sorts; assert it produces one model candidate, preserves `identity_mode: 'composite_fingerprint'`, and never adds a synthetic comment ID. Add a third test with three long candidates proving that a candidate which would exceed `maxTextChars` starts the next model batch. Add a QA test proving that capture batches are not reported as missing `ai-comment-extraction.json`, while model batches are.
 
 - [ ] **Step 2: Run the preparation and QA tests and verify RED**
 
@@ -411,7 +454,12 @@ Implement these rules:
 
 ```js
 function candidateMergeKey(candidate) {
-  return String(candidate.source_comment_id || candidate.candidate_hash || candidate.candidate_id);
+  return String(
+    candidate.source_comment_id ||
+    candidate.source_composite_fingerprint ||
+    candidate.candidate_hash ||
+    candidate.candidate_id
+  );
 }
 
 function shouldStartNewBatch(current, candidate, limits) {
@@ -422,7 +470,7 @@ function shouldStartNewBatch(current, candidate, limits) {
 }
 ```
 
-Read only `batch_kind === 'capture'` artifacts, iterate them by directory name, and merge in first-seen order. For every merged candidate, union and sort `source_capture_batch_ids`; do not overwrite its DOM identity with model output. Write each model artifact with `batch_kind: 'model'`, its own `batch_id` (`model_001`, `model_002`, ...), `state.has_more: false`, and the merged candidates. Persist a manifest with counts, limits, source capture batch IDs, and output paths.
+Read only `batch_kind === 'capture'` artifacts, iterate them by directory name, and merge in first-seen order. For every merged candidate, union and sort `source_capture_batch_ids`; do not overwrite its DOM-ID or composite-fingerprint evidence with model output. Write each model artifact with `batch_kind: 'model'`, its own `batch_id` (`model_001`, `model_002`, ...), `state.has_more: false`, and the merged candidates. Persist a manifest with counts, limits, source capture batch IDs, identity-mode counts, and output paths.
 
 In `read_task_batch_metrics`, only require AI extraction and normalized files for `batch_kind == 'model'`. A capture batch with `has_more` still contributes a truncation issue; a capture batch without an AI file does not.
 
@@ -495,7 +543,7 @@ Expected: FAIL because the extraction runner does not exist and the schema rejec
 
 - [ ] **Step 3: Implement the strict-schema extraction runner**
 
-Build the prompt by concatenating `prompts/comment-candidate-batch-extraction.md` and the complete model batch JSON. It must say that source IDs are DOM evidence and are not model output fields. Reuse `writeModelOutputSchema` exactly once per run:
+Build the prompt by concatenating `prompts/comment-candidate-batch-extraction.md` and the complete model batch JSON. It must say that source DOM IDs and composite-fingerprint inputs are evidence, not model output fields. Reuse `writeModelOutputSchema` exactly once per run:
 
 ```js
 const modelSchemaPath = path.join(args.taskDir, 'model-output-schema.json');
@@ -504,7 +552,7 @@ writeModelOutputSchema(args.schemaPath, modelSchemaPath);
 
 For each `batch_kind === 'model'`, invoke the same `codex exec --skip-git-repo-check --sandbox read-only --output-schema <strict clone> -o <batch output> -` command shape used by `run-comment-ai-review.js`. In dry-run mode, write the strict schema but do not invoke the model. Do not run capture batches through the model.
 
-Add `weibo` to the canonical extraction schema platform enum. Update the prompt with a Weibo example and the exact sentence: “`source_comment_id`、父评论 ID 和根评论 ID 由 DOM 证据回填，禁止模型推测或输出。”
+Add `weibo` to the canonical extraction schema platform enum. Update the prompt with a Weibo example and the exact sentence: “`source_comment_id`、父评论 ID、根评论 ID、作者 UID href、时间、回复/根上下文和复合指纹均由 DOM 证据回填，禁止模型推测、输出或补全。”
 
 - [ ] **Step 4: Run the runner and schema tests and verify GREEN**
 
@@ -525,7 +573,7 @@ git add src/normalize/run-comment-ai-extraction.js script/run-comment-ai-extract
 git commit -m "feat(comment-ai): run strict extraction batches"
 ```
 
-## Task 6: Normalize Weibo IDs And Deduplicate Across Sort Streams
+## Task 6: Normalize Weibo Evidence And Deduplicate Across Sort Streams
 
 **Files:**
 - Create: `src/adapters/weibo.js`
@@ -539,7 +587,7 @@ git commit -m "feat(comment-ai): run strict extraction batches"
 
 **Interfaces:**
 - Produces: `extractWeiboPostId(sourceUrl): string`, returning `<author-or-detail-path>/<status-token>` for canonical Weibo detail URLs or an empty string for unsupported URLs.
-- Produces: normalized rows whose `comment_id`, `parent_comment_id`, `root_comment_id`, `post_id`, and `row_key` come from candidate evidence when present.
+- Produces: normalized rows whose `post_id` and `row_key` come from candidate evidence. DOM-ID candidates populate `comment_id`, `parent_comment_id`, and `root_comment_id`; composite-fingerprint candidates retain those fields as empty and preserve the evidence mode in `raw.source_chunk`.
 
 - [ ] **Step 1: Write failing Weibo adapter and cross-stream normalization tests**
 
@@ -556,6 +604,8 @@ assert.equal(rows[0].post_id, '1812511057/Pa1Bc2D3e');
 ```
 
 Add a merge test containing two rows with the same `row_key` from different model batches; assert exactly one row remains and `duplicate_count` is `1`.
+
+Add a composite-fingerprint normalization test with a candidate that has no source comment IDs but has all five public inputs and `source_composite_fingerprint: 'sha256:example'`. Assert `comment_id`, `parent_comment_id`, and `root_comment_id` stay empty, `row_key` is based on the composite fingerprint, and `raw.source_chunk.identity_mode == 'composite_fingerprint'`. Add no model-provided identity fields to the AI row fixture.
 
 - [ ] **Step 2: Run adapter, normalizer, and merge tests and verify RED**
 
@@ -576,14 +626,17 @@ In `normalize-ai-comment-extraction.js`, build a candidate map keyed by `candida
 
 ```js
 const commentId = normalizeSpaces(sourceChunk?.source_comment_id);
+const sourceCompositeFingerprint = normalizeSpaces(sourceChunk?.source_composite_fingerprint);
 const rowKey = commentId
   ? buildRowKey([platform, sourceUrl, commentId])
-  : buildRowKey([platform, sourceUrl, rowType, sourceChunkId, userName, text, sourceBatchId]);
+  : sourceCompositeFingerprint
+    ? buildRowKey([platform, sourceUrl, sourceCompositeFingerprint])
+    : buildRowKey([platform, sourceUrl, rowType, sourceChunkId, sourceBatchId]);
 ```
 
-Copy `source_parent_comment_id` and `source_root_comment_id` when present. For a level-1 row with a comment ID but no root ID, set root ID to the comment ID. Preserve `source_capture_batch_ids` inside `raw.source_chunk`; do not add an AI-supplied ID to canonical rows.
+Copy `source_parent_comment_id` and `source_root_comment_id` only for DOM-ID candidates. For a level-1 row with a comment ID but no root ID, set root ID to the comment ID. For composite-fingerprint candidates, leave the three canonical comment-ID fields empty and preserve `identity_mode`, all five fingerprint inputs, `source_composite_fingerprint`, and `source_capture_batch_ids` inside `raw.source_chunk`. Reject or mark partial any AI row without a matching candidate or complete candidate identity evidence; do not add an AI-supplied ID, UID, timestamp, context, or fingerprint to canonical rows.
 
-Keep `merge_task_batches.py` row-key dedupe but document it in the summary as `duplicate_count`; no text-only cross-stream merge may change an evidence-backed row's identity.
+Keep `merge_task_batches.py` row-key dedupe but document it in the summary as `duplicate_count`; DOM-ID and complete composite-fingerprint rows may merge only on their own deterministic keys. No text-only cross-stream merge may change an evidence-backed row's identity or promote a composite row to DOM-ID quality.
 
 - [ ] **Step 4: Run adapter, normalizer, and merge tests and verify GREEN**
 
@@ -602,7 +655,7 @@ Run:
 
 ```bash
 git add src/adapters/weibo.js adapters/weibo.js test/weibo-adapter.test.js src/normalize/normalize-ai-comment-extraction.js test/normalize-ai-comment-extraction.test.js src/pipeline/merge_task_batches.py test/pipeline/test_merge_task_batches.py test/project-structure.test.js
-git commit -m "feat(weibo): normalize DOM-backed comment identities"
+git commit -m "feat(weibo): normalize captured comment evidence"
 ```
 
 ## Task 7: Gate QA And Resume On Both Sort Streams
@@ -615,8 +668,8 @@ git commit -m "feat(weibo): normalize DOM-backed comment identities"
 
 **Interfaces:**
 - Consumes: `capture-state.json.streams.hot` and `.time` plus normalized model-batch rows.
-- Produces: issue codes `weibo_hot_stream_incomplete`, `weibo_time_stream_incomplete`, `weibo_missing_stable_comment_id`, and `weibo_level1_coverage_below_threshold`.
-- Produces: a Weibo resume action naming the incomplete stream instead of redoing a verified stream.
+- Produces: issue codes `weibo_hot_stream_incomplete`, `weibo_time_stream_incomplete`, `weibo_composite_identity_only`, `weibo_missing_identity_evidence`, and `weibo_level1_coverage_below_threshold`.
+- Produces: a Weibo resume action naming the incomplete stream instead of redoing a verified stream, or a DOM-ID re-probe action for a composite-only task.
 
 - [ ] **Step 1: Write failing dual-stream QA and resume tests**
 
@@ -627,7 +680,9 @@ self.assertEqual(task["status"], "partial")
 self.assertIn("weibo_time_stream_incomplete", task["issues"])
 ```
 
-Add a second fixture where both streams are verified, every normalized level-1 row has `comment_id`, the visible declared count is 10, and `unique_level1_count` is 8. Assert `status == "ok"` and `weibo_level1_coverage == 0.8`.
+Add a second fixture where both streams are verified, every normalized level-1 row has a DOM-backed `comment_id`, the visible declared count is 10, and `unique_level1_count` is 8. Assert `status == "ok"` and `weibo_level1_coverage == 0.8`.
+
+Add a third fixture where both streams are verified and every level-1 row has a complete `raw.source_chunk.identity_mode == 'composite_fingerprint'` but no comment ID. Assert `status == "partial"`, `weibo_composite_identity_only` is present, and no result field or summary calls the dual-sort capture complete. Add a resume test asserting that this fixture schedules `reprobe_weibo_dom_identity` rather than a hot/time recapture or any API fallback.
 
 Add a resume test asserting an incomplete `time` stream produces exactly one action with `action == "resume_weibo_time_stream"` and does not schedule a hot-stream recapture.
 
@@ -643,15 +698,15 @@ Expected: FAIL because stream-aware Weibo QA and resume actions do not exist.
 
 - [ ] **Step 3: Implement stream-aware QA and selective resume**
 
-Read stream fields only for `platform == 'weibo'`. A stream is complete only when `verified` is true, `stop_reason` is `page_end`, and `remaining_expand_count` is zero. Count unique level-1 DOM-backed rows by `comment_id`; calculate coverage only when the platform declaration is positive:
+Read stream fields only for `platform == 'weibo'`. A stream is complete only when `verified` is true, `stop_reason` is `page_end`, and `remaining_expand_count` is zero. Count unique level-1 DOM-ID rows by `comment_id`; calculate `weibo_level1_coverage` only for the DOM-ID mode and only when the platform declaration is positive:
 
 ```python
 coverage = unique_level1_count / declared_level1_count if declared_level1_count else None
 ```
 
-Append the named issue codes for incomplete streams, missing stable IDs, or coverage below `COMMENT_COUNT_THRESHOLD`. Return `partial` for any of these issues and preserve the existing hard `failed` behavior for zero comments, login/verification blocks, or ambiguous roots.
+Append the named issue codes for incomplete streams, composite-only identity, missing identity evidence, or DOM-ID coverage below `COMMENT_COUNT_THRESHOLD`. Return `partial` for any of these issues. A task with complete composite evidence remains `partial` even when both streams reach page end, and its summary must state that dual-sort all-complete is not asserted. Preserve the existing hard `failed` behavior for zero comments, login/verification blocks, or ambiguous roots.
 
-In `resume_comment_project.py`, generate `resume_weibo_hot_stream` or `resume_weibo_time_stream` only for incomplete streams. Include the previous profile path and task URL in each action; never recommend an API fallback.
+In `resume_comment_project.py`, generate `resume_weibo_hot_stream` or `resume_weibo_time_stream` only for incomplete streams. For a composite-only task whose streams are otherwise complete, generate `reprobe_weibo_dom_identity` rather than recapturing a verified stream. Include the previous profile path and task URL in each action; never recommend an API fallback.
 
 - [ ] **Step 4: Run the Python tests and verify GREEN**
 
@@ -683,7 +738,7 @@ git commit -m "feat(weibo): gate dual-stream comment delivery"
 
 **Interfaces:**
 - Consumes: the completed capture, model, normalization, merge, QA, and Excel pipeline.
-- Produces: an auditable pilot project whose `qa-summary.json.status` is `ok`, or a precisely scoped `partial`/`failed` artifact with no API fallback.
+- Produces: an auditable pilot project whose `qa-summary.json.status` is `ok` only with DOM-ID evidence, or a precisely scoped `partial`/`failed` artifact with no API fallback. A composite-only pilot is expected to be `partial`.
 
 - [ ] **Step 1: Write failing documentation-contract tests**
 
@@ -711,7 +766,7 @@ Expected: FAIL because the current Weibo rules document API-first comments and t
 
 - [ ] **Step 3: Update the operating documentation**
 
-Replace the comment-collection section of `docs/tcl_weibo_comment_workflow_rules_2026-07-07.md` with the Chrome/model pipeline from this plan. Keep the existing search and official-account post interface commands unchanged. State the exact `ok`, `partial`, and `failed` semantics, the profile-validation gate, model-batch limits, strict schema clone, and user-action rule for login/CAPTCHA.
+Replace the comment-collection section of `docs/tcl_weibo_comment_workflow_rules_2026-07-07.md` with the Chrome/model pipeline from this plan. Keep the existing search and official-account post interface commands unchanged. State the two identity modes, the rule that DOM-ID may be `ok` while composite fingerprint is always `partial` and never dual-sort all-complete, the profile-validation gate, model-batch limits, strict schema clone, and user-action rule for login/CAPTCHA.
 
 Add a Weibo subsection to the delivery skill and workflow: Chrome plugin and model extraction are mandatory; only the explicit profile scope may be read; capture batches are evidence-only; model batches are 80 candidates/24,000 characters; no MCP/API fallback is permitted for Weibo comments.
 
@@ -727,7 +782,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Run the Chrome/model pilot and verify the delivery gate**
 
-Create `output/weibo_chrome_pilot/` with a small set of accessible TCL Weibo task URLs. For each task: validate the profile, capture both sort streams through Chrome, prepare model batches, run model extraction, normalize, merge, run QA, and build the existing report only if QA is `ok`.
+Create `output/weibo_chrome_pilot/` with a small set of accessible TCL Weibo task URLs. For each task: validate the profile, capture both sort streams through Chrome, prepare model batches, run model extraction, normalize, merge, run QA, and build the existing report only if QA is `ok`. If profile evidence is composite-only, retain the audit artifacts and issue the `partial` report without claiming dual-sort all-complete or emitting a formal delivery.
 
 Run the final verification suite:
 
@@ -738,7 +793,7 @@ python src/pipeline/qa_comment_delivery.py --project-dir output/weibo_chrome_pil
 git diff --check
 ```
 
-Expected: all Node and Python tests pass; the pilot's `qa-summary.json` has `status: "ok"`, or it explicitly reports the recorded `partial`/`failed` reason without an API fallback.
+Expected: all Node and Python tests pass; the pilot's `qa-summary.json` has `status: "ok"` only when DOM-ID evidence satisfies the gate, otherwise it explicitly reports the recorded `partial`/`failed` reason (including `weibo_composite_identity_only` when applicable) without an API fallback.
 
 - [ ] **Step 6: Commit Task 8**
 
@@ -751,6 +806,6 @@ git commit -m "docs(weibo): document chrome-only comment workflow"
 
 ## Plan Self-Review
 
-- Scope coverage: Tasks 1–3 implement the profile/safe Chrome capture boundary; Task 4 separates browser and model batches; Task 5 handles strict model schema compatibility; Task 6 guarantees deterministic identity and merge; Task 7 implements `ok`/`partial`/`failed` and selective resume; Task 8 updates legacy rules and verifies the real pipeline.
-- Cross-task interfaces: capture artifacts remain `comment-dom-batch-v1`; only `batch_kind` separates evidence and model material. Model output refers to `candidate_id`; normalizer is the sole writer of comment identity. QA consumes capture stream state and normalized rows.
-- External dependency: real selector values are intentionally runtime profile data collected through Chrome in Task 1. The code never invents or falls back to a selector, interface, or text-based comment identity.
+- Scope coverage: Tasks 1–3 implement the profile/safe Chrome capture boundary and the DOM-ID/composite evidence modes; Task 4 separates browser and model batches; Task 5 handles strict model schema compatibility; Task 6 guarantees deterministic evidence-based merge; Task 7 implements `ok`/`partial`/`failed` and selective resume; Task 8 updates legacy rules and verifies the real pipeline.
+- Cross-task interfaces: capture artifacts remain `comment-dom-batch-v1`; only `batch_kind` separates evidence and model material. Model output refers to `candidate_id`; normalizer is the sole writer of DOM IDs and conserves composite evidence. QA consumes capture stream state and normalized rows, and only DOM-ID evidence may yield `ok`.
+- External dependency: real selector values are intentionally runtime profile data collected through Chrome in Task 1. The code never invents or falls back to a selector, interface, or model-created identity. Its only allowed fallback is the fully observed public-DOM composite fingerprint, which remains `partial`.
