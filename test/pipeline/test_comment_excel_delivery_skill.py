@@ -181,6 +181,28 @@ class CommentExcelDeliverySkillTest(unittest.TestCase):
         parse_section = workflow.split("For an existing B站 delivery workbook", 1)[0]
         self.assertNotIn("docs/米其林评论区分析KOL link-0630.xlsx", parse_section)
 
+    def test_skill_requires_safe_scoped_chrome_comment_capture(self):
+        skill = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+        combined = skill + "\n" + workflow
+
+        for text in [
+            "chrome-comment-capture.js",
+            "exact visible text",
+            "comment root",
+            "收起",
+            "read-only",
+            "capture-state.json",
+            "count_gap",
+            "PLATFORM_PROFILES.douyin",
+        ]:
+            self.assertIn(text, combined)
+
+        self.assertRegex(
+            workflow,
+            r"(?is)exact.*expand.*never.*收起",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

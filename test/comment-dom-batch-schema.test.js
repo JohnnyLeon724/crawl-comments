@@ -51,6 +51,18 @@ test('comment DOM batch schema constrains scroll, state, and limits', () => {
   assert.equal(state.required.includes('has_more'), true);
   assert.equal(state.properties.new_candidate_count.minimum, 0);
 
+  for (const field of [
+    'declared_comment_count',
+    'captured_record_count',
+    'remaining_expand_count',
+    'end_signal',
+    'count_gap'
+  ]) {
+    assert.equal(Boolean(state.properties[field]), true, `${field} should be supported`);
+  }
+  assert.equal(state.properties.declared_comment_count.minimum, 0);
+  assert.equal(state.properties.count_gap.minimum, 0);
+
   const limits = schema.properties.limits;
   assert.equal(limits.required.includes('maxCandidates'), true);
   assert.equal(limits.required.includes('maxCharsPerCandidate'), true);

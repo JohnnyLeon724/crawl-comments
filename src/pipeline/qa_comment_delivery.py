@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import argparse
 import json
 from collections import Counter, defaultdict
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -91,6 +93,13 @@ def build_notes(issues: list[str], metrics: dict[str, Any]) -> str:
         notes.append(f"{metrics['missing_ai_extraction_batch_count']} 个 batch 缺少 AI 结构化输出")
     if "truncated_batch" in issues:
         notes.append(f"{metrics['truncated_batch_count']} 个 batch 达到候选上限")
+    if metrics.get("declared_comment_count", 0):
+        notes.append(
+            "平台展示 "
+            f"{metrics['declared_comment_count']} 条，当前会话可读 "
+            f"{metrics['rendered_comment_count']} 条，差异 "
+            f"{metrics['rendered_count_gap']} 条"
+        )
     return "；".join(notes)
 
 
@@ -132,10 +141,31 @@ def read_task_batch_metrics(project_dir: Path, task_id: str) -> dict[str, int]:
     }
 
 
+def read_task_capture_observation(project_dir: Path, task_id: str) -> dict[str, Any]:
+    state = read_json_if_exists(project_dir / "runs" / task_id / "capture-state.json")
+    if not state:
+        return {
+            "declared_comment_count": 0,
+            "rendered_comment_count": 0,
+            "rendered_count_gap": 0,
+            "capture_end_signal": "",
+        }
+
+    declared = max(0, int(state.get("declared_comment_count") or 0))
+    rendered = max(0, int(state.get("captured_record_count") or 0))
+    return {
+        "declared_comment_count": declared,
+        "rendered_comment_count": rendered,
+        "rendered_count_gap": max(0, declared - rendered),
+        "capture_end_signal": str(state.get("end_signal") or ""),
+    }
+
+
 def build_task_qa(
     task: dict[str, Any],
     rows: list[dict[str, Any]],
     batch_metrics: dict[str, int] | None = None,
+    capture_observation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     expected = int(task.get("expected_comment_count") or 0)
     actual = len(rows)
@@ -144,6 +174,12 @@ def build_task_qa(
         "empty_batch_count": 0,
         "missing_ai_extraction_batch_count": 0,
         "truncated_batch_count": 0,
+    }
+    capture_observation = capture_observation or {
+        "declared_comment_count": 0,
+        "rendered_comment_count": 0,
+        "rendered_count_gap": 0,
+        "capture_end_signal": "",
     }
     empty_text_count = len([row for row in rows if not str(row.get("text") or "").strip()])
     missing_user_name_count = len([row for row in rows if not str(row.get("user_name") or "").strip()])
@@ -189,6 +225,7 @@ def build_task_qa(
         "missing_time_or_location_count": missing_time_or_location_count,
         "missing_source_chunk_count": missing_source_chunk_count,
         **batch_metrics,
+        **capture_observation,
     }
 
     return {
@@ -220,13 +257,14 @@ def build_qa_summary(project_dir: str | Path, out: str | Path | None = None) -> 
             task,
             comments_by_task.get(str(task.get("task_id") or ""), []),
             read_task_batch_metrics(root, str(task.get("task_id") or "")),
+            read_task_capture_observation(root, str(task.get("task_id") or "")),
         )
         for task in tasks
     ]
     status_counts = Counter(task["status"] for task in task_results)
     summary = {
         "schema_version": "comment-delivery-qa-v1",
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "status": project_status(status_counts, len(task_results)),
         "total_tasks": len(task_results),
         "ok_count": status_counts.get("ok", 0),

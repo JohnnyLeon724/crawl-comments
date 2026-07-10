@@ -168,6 +168,66 @@ class QaCommentDeliveryTest(unittest.TestCase):
             self.assertEqual(task["truncated_batch_count"], 1)
             self.assertEqual(summary["total_batch_count"], 2)
 
+    def test_reports_rendered_count_gap_without_turning_a_passing_task_partial(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            (project_dir / "crawl-tasks.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "task_id": "task_0001",
+                                "phase": "KOL",
+                                "platform": "douyin",
+                                "expected_comment_count": 1,
+                            },
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (project_dir / "all-normalized-comments.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task_0001",
+                        "row_type": "level1",
+                        "user_name": "用户A",
+                        "text": "评论",
+                        "created_at": "3月前",
+                        "ip_location": "江苏",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            state_path = project_dir / "runs" / "task_0001" / "capture-state.json"
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "declared_comment_count": 216,
+                        "captured_record_count": 197,
+                        "count_gap": 19,
+                        "end_signal": "暂时没有更多评论",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            task = build_qa_summary(project_dir)["tasks"][0]
+
+            self.assertEqual(task["status"], "ok")
+            self.assertEqual(task["issues"], [])
+            self.assertEqual(task["declared_comment_count"], 216)
+            self.assertEqual(task["rendered_comment_count"], 197)
+            self.assertEqual(task["rendered_count_gap"], 19)
+            self.assertEqual(task["capture_end_signal"], "暂时没有更多评论")
+            self.assertIn("平台展示 216 条，当前会话可读 197 条，差异 19 条", task["notes"])
+
 
 if __name__ == "__main__":
     unittest.main()

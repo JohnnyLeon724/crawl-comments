@@ -66,3 +66,24 @@ test('usage documentation covers Douyin modal_id and accidental tab cleanup', ()
     assert.ok(doc.includes(requiredText), `missing text: ${requiredText}`);
   }
 });
+
+test('usage documentation requires the scoped exact-label Chrome adapter', () => {
+  const doc = fs.readFileSync(docPath, 'utf8');
+
+  for (const requiredText of [
+    'chrome-comment-capture.js',
+    'PLATFORM_PROFILES.douyin',
+    'expandExactLabel',
+    'captureScopedRecords',
+    'scrollCommentContainer',
+    'getByText(label, { exact: true })',
+    '收起',
+    'read-only',
+    'count_gap'
+  ]) {
+    assert.ok(doc.includes(requiredText), `missing text: ${requiredText}`);
+  }
+
+  assert.doesNotMatch(doc, /getByText\(label, \{ exact: false \}\)\.all/);
+  assert.doesNotMatch(doc, /\[data-e2e\*="comment"], \[class\*="comment"\]/);
+});

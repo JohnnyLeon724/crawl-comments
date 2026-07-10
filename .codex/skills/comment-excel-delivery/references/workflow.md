@@ -63,13 +63,15 @@ For each `runs/<task_id>/task.json`, use `chrome:control-chrome` as the default 
 2. Open a fresh tab for `task.source_url`; do not manually reuse an old content tab as the task target.
 3. Before navigation, normalize Douyin user modal links. When `task.source_url` has the shape `user?...modal_id=...`, extract `modal_id` and directly open `https://www.douyin.com/video/<modal_id>` or the equivalent `/video/<modal_id>` detail URL. Do not run the task inside the Douyin short-video feed, because scrolling the short-video feed can switch to the next video. After the detail page opens, scroll only the comment container or platform detail pane.
 4. Confirm the current page is the intended Douyin or Xiaohongshu target. If login, CAPTCHA, verification, privacy consent, or platform access checks appear, pause for user action and ask the user to handle them. Do not bypass the check or replace the platform page with another source.
-5. Use Chrome automation to click visible expand controls such as comments, replies, "展开更多", or "展开 N 条回复". Prefer bounded, repeated rounds over one large page scrape.
-6. Add a tab cleanup guard around risky clicks:
+5. Load `src/browser/chrome-comment-capture.js` after Chrome has been initialized. Use `PLATFORM_PROFILES.douyin` for Douyin. For any other platform, supply an explicit safe profile with a unique comment root and a comment item selector; do not guess a broad page root.
+6. Capture the scoped comment root with `captureScopedRecords(tab, profile)`. Its page evaluation is read-only and produces structural top-level and reply candidates, safe visible control labels, a comment-container scroll observation, and the platform end signal.
+7. Use the exact visible text of each approved reply-expansion label with `expandExactLabel`. Approved labels include `展开更多`, `展开 N 条回复`, `查看更多回复`, and `查看全部 N 条回复`. Never click `收起`, `展开全文`, product, detail, or shared CSS-class controls. The adapter uses `root.getByText(label, { exact: true })`, confirms the unique root, and clicks matching controls bottom-up. It rereads the control text immediately before each click, skipping an element that has changed to `收起` after a nested control expanded.
+8. Add a tab cleanup guard around risky clicks:
    - Record the task tab id and a before snapshot with `browser.tabs.list()` before clicking expand controls or comment-area elements.
    - After each click batch, call `browser.tabs.list()` again and compare before and after.
    - If a new tab opened to a commenter profile, creator profile, `/user/` page, or any URL that is not the task detail URL, close the accidental tab and continue from the task tab.
    - If the task tab itself navigated away from the intended detail page, go back or reopen the normalized task URL before capturing.
-7. In each round, capture the current visible comment candidate DOM before scrolling. Save non-empty batches using the existing schema and paths:
+9. In each round, build and save a `comment-dom-batch-v1` with `buildCommentDomBatch` and `writeCaptureArtifacts`. Then call `scrollCommentContainer(tab, profile)` so only Chrome CUA scrolls the observed comment container; do not mutate `scrollTop` through page evaluation and do not scroll the Douyin short-video feed. Save non-empty batches using the existing schema and paths:
 
 ```text
 output/<project_id>/runs/<task_id>/
@@ -77,12 +79,12 @@ output/<project_id>/runs/<task_id>/
   batches/<batch_id>/comment-dom-batch.json
 ```
 
-8. Each `comment-dom-batch.json` must stay compatible with `comment-dom-batch-v1` and include `candidate_id`, `candidate_hash`, `dom_path`, `role_hint`, `inner_text`, `html`, `nearby_buttons`, `rect`, and `captured_at` for candidates when available.
-9. Update `capture-state.json` with `last_batch_id`, `next_batch_id`, seen candidate hashes, round counts, candidate totals, and stop reason.
-10. Stop after idle, navigation away, user-required verification, or configured runtime/batch limits. Close or finalize the task tab before moving to the next task.
-11. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
-12. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
-13. Normalize each batch:
+10. Each `comment-dom-batch.json` must stay compatible with `comment-dom-batch-v1` and include `candidate_id`, `candidate_hash`, `dom_path`, `role_hint`, `inner_text`, `html`, `nearby_buttons`, `rect`, and `captured_at` for candidates when available.
+11. Update `capture-state.json` with `last_batch_id`, `next_batch_id`, seen candidate hashes, round counts, candidate totals, `declared_comment_count`, `captured_record_count`, `remaining_expand_count`, `end_signal`, and `count_gap`. QA records the displayed-versus-current-session rendered gap in notes without making that observation an issue by itself.
+12. Stop after a scoped end signal, repeated idle rounds, navigation away, user-required verification, or configured runtime/batch limits. Close or finalize the task tab before moving to the next task.
+13. For each batch, read `prompts/comment-candidate-batch-extraction.md` and `schemas/ai-comment-extraction.schema.json`.
+14. Have AI output `batches/<batch_id>/ai-comment-extraction.json`, using `candidate_id` as `source_chunk_id`.
+15. Normalize each batch:
 
 ```bash
 node script/normalize-ai-comment-extraction.js \
@@ -92,7 +94,7 @@ node script/normalize-ai-comment-extraction.js \
   --out output/<project_id>/runs/<task_id>/batches/<batch_id>/normalized-comments.jsonl
 ```
 
-14. Merge task batches:
+16. Merge task batches:
 
 ```bash
 python src/pipeline/merge_task_batches.py \

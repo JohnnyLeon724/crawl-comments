@@ -11,7 +11,7 @@ The default flow is:
 1. Parse task links into `output/<project_id>/crawl-tasks.json`.
 2. Normalize Douyin `user?...modal_id=...` links to `/video/<modal_id>` before opening the task.
 3. Use `chrome:control-chrome` to open each normalized task URL in a fresh tab.
-4. Let Codex automate visible comment expansion, reply expansion, scrolling, and DOM inspection through Chrome.
+4. Let Codex use the scoped, exact-label adapter for reply expansion, comment-container scrolling, and read-only DOM inspection through Chrome.
 5. Stop for user action when login, CAPTCHA, verification, privacy consent, or platform access checks appear. Do not bypass those checks.
 6. Save visible DOM candidates as `comment-dom-batch-v1` files under the existing batch paths.
 7. Run AI extraction, normalization, task merge, project merge, QA, and Excel generation with the existing commands.
@@ -31,9 +31,9 @@ Run the browser part in a fresh Chrome tab:
 2. If a Douyin URL has the form `user?...modal_id=...`, extract `modal_id` and navigate to `/video/<modal_id>` instead of the user page.
 3. Confirm that the current page is the intended Douyin or Xiaohongshu page.
 4. If login, CAPTCHA, verification, or consent UI appears, pause and ask the user to complete it in Chrome.
-5. Click visible expand controls such as `展开更多`, `展开 N 条回复`, comments, or replies.
-6. Capture the current visible comment candidate DOM before scrolling.
-7. Scroll the comment area or detail pane, not the Douyin short-video feed. Scrolling the short-video feed can switch to the next video.
+5. Use only safe exact reply-expansion labels within the unique comment root. Never click `收起`, `展开全文`, product, detail, or shared CSS-class controls.
+6. Capture the current visible comment candidate DOM through the adapter before scrolling.
+7. Scroll the observed comment area or detail pane through Chrome CUA, not the Douyin short-video feed. Scrolling the short-video feed can switch to the next video.
 8. Use a tab cleanup guard around expand and comment-area clicks. Compare `browser.tabs.list()` before and after each click batch; if a commenter profile, creator profile, `/user/` page, or other non-task page opens, close the accidental tab and return to the task tab.
 9. Repeat bounded rounds until idle, navigation away, verification, or configured limits.
 10. Close or finalize the task tab before moving to the next task.
@@ -82,7 +82,14 @@ Each `comment-dom-batch.json` must use `comment-dom-batch-v1` and preserve candi
   "scroll": {},
   "state": {
     "new_candidate_count": 1,
-    "has_more": false
+    "seen_candidate_count": 1,
+    "has_more": false,
+    "stop_reason": "page_end",
+    "declared_comment_count": 216,
+    "captured_record_count": 197,
+    "remaining_expand_count": 0,
+    "end_signal": "暂时没有更多评论",
+    "count_gap": 19
   },
   "limits": {
     "maxCandidates": 80,
@@ -97,7 +104,7 @@ Each `comment-dom-batch.json` must use `comment-dom-batch-v1` and preserve candi
       "inner_text": "用户A 评论正文 1周前·北京 3 分享 回复",
       "html": "<div>用户A 评论正文</div>",
       "nearby_buttons": ["用户A", "回复"],
-      "rect": {"x": 0, "y": 0, "width": 320, "height": 80},
+      "rect": {"top": 0, "left": 0, "width": 320, "height": 80},
       "captured_at": "2026-07-09T00:00:00.000Z"
     }
   ]
@@ -106,56 +113,57 @@ Each `comment-dom-batch.json` must use `comment-dom-batch-v1` and preserve candi
 
 Do not create Chrome-specific artifact names such as `chrome-dom-batch.json`.
 
-## 5. Chrome control example
+## 5. Safe Chrome control example
 
-The exact Chrome API is provided by the `chrome:control-chrome` skill. A production run must read that skill first. The browser client exposes Playwright-compatible page access through `tab.playwright`; use that surface to inspect, click, scroll, and extract bounded DOM candidates.
+The exact Chrome API is provided by the `chrome:control-chrome` skill. A production run must read that skill first. After Chrome has initialized the task tab, `tab.playwright` is the read-only observation surface used by `src/browser/chrome-comment-capture.js`; the adapter routes interaction through scoped Playwright locators and Chrome CUA.
+
+The built-in profile is `PLATFORM_PROFILES.douyin`. It requires exactly one `.comment-mainContent` comment root and captures `.Eh0a5CD4` items, classifying descendants of `.replyContainer` as replies. Do not apply that profile to another platform: pass another explicit safe profile or use the MCP/CDP fallback.
 
 ```javascript
+const capture = require('../src/browser/chrome-comment-capture.js');
+
 const tab = await browser.tabs.new();
-const targetUrl = normalizeDouyinModalUrl(task.source_url);
-await tab.goto(targetUrl);
+await tab.goto(normalizeDouyinModalUrl(task.source_url));
 
-const page = tab.playwright;
-await page.waitForLoadState('domcontentloaded');
+const profile = capture.PLATFORM_PROFILES.douyin;
+const firstSnapshot = await capture.captureScopedRecords(tab, profile);
+const labels = capture.listSafeExpandLabels(firstSnapshot.controls);
 
-const blockedText = await page.locator('body').innerText({ timeout: 5000 });
-if (/登录|验证码|CAPTCHA|验证|隐私|同意/.test(blockedText)) {
-  throw new Error('Page requires user action for login, CAPTCHA, verification, or consent.');
+for (const label of labels) {
+  // expandExactLabel rejects 收起、展开全文、商品和详情；it calls
+  // root.getByText(label, { exact: true }) only inside the unique comment root.
+  await capture.expandExactLabel(tab, profile.commentRootSelector, label);
 }
 
-for (const label of ['展开更多', '展开回复', '查看更多回复']) {
-  const beforeTabs = await browser.tabs.list();
-  const buttons = await page.getByText(label, { exact: false }).all();
-  for (const button of buttons.slice(0, 3)) {
-    await button.click({ timeout: 1500 }).catch(() => {});
-    await page.waitForTimeout(900);
-  }
-  const afterTabs = await browser.tabs.list();
-  await closeAccidentalProfileTabs(beforeTabs, afterTabs, tab);
-}
-
-const candidates = await page.locator('[data-e2e*="comment"], [class*="comment"], [class*="reply"]').evaluateAll(nodes =>
-  nodes.slice(0, 80).map((node, index) => {
-    const rect = node.getBoundingClientRect();
-    return {
-      candidate_id: `candidate_${String(index + 1).padStart(6, '0')}`,
-      candidate_hash: '',
-      dom_path: node.tagName.toLowerCase(),
-      role_hint: /reply/i.test(node.className) ? 'reply_candidate' : 'comment_candidate',
-      inner_text: (node.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 2500),
-      html: (node.outerHTML || '').slice(0, 2500),
-      nearby_buttons: Array.from(node.querySelectorAll('button,a')).slice(0, 8).map(item => (item.innerText || '').trim()).filter(Boolean),
-      rect: {x: rect.x, y: rect.y, width: rect.width, height: rect.height},
-      captured_at: new Date().toISOString()
-    };
-  }).filter(item => item.inner_text)
-);
-
-await scrollCommentContainerOnly(page);
-await page.waitForTimeout(1200);
+const scrolled = await capture.scrollCommentContainer(tab, profile);
+const captured = await capture.captureScopedRecords(tab, profile, {
+  declared_comment_count: firstSnapshot.declared_comment_count
+});
+const state = capture.buildCaptureState({
+  platform: 'douyin',
+  root_selector: profile.commentRootSelector,
+  round: 1,
+  declared_comment_count: captured.declared_comment_count,
+  candidates: captured.candidates,
+  remaining_expand_count: capture.listSafeExpandLabels(captured.controls).length,
+  scroll: scrolled.after.scroll,
+  end_signal: captured.end_signal,
+  stop_reason: captured.end_signal ? 'page_end' : 'in_progress'
+});
+const batch = capture.buildCommentDomBatch({
+  batch_id: 'batch_0001',
+  task_id: task.task_id,
+  platform: 'douyin',
+  source_url: task.source_url,
+  state,
+  candidates: captured.candidates
+});
+capture.writeCaptureArtifacts(task.run_dir, batch, state);
 ```
 
-This example demonstrates the expected Chrome control pattern. The saved file still must be a valid `comment-dom-batch-v1` batch with stable candidate hashes and capture state.
+`expandExactLabel` clicks matching controls bottom-up so newly inserted replies do not shift the remaining targets. It rereads exact text immediately before each click and skips a target that has changed to `收起`. Never click a shared CSS class, a broad page-text selector, or a control that is not an exact allowlisted reply-expansion label. `scrollCommentContainer` uses `tab.cua.scroll` at the observed comment-container coordinates; it never writes `scrollTop` and never scrolls the Douyin short-video feed.
+
+Record `declared_comment_count`, `captured_record_count`, `remaining_expand_count`, `end_signal`, and `count_gap` in `capture-state.json`. QA exposes the platform display count versus the current-session rendered count in notes; the gap is an observation rather than an automatic partial result.
 
 ## 6. AI extraction and normalization
 
