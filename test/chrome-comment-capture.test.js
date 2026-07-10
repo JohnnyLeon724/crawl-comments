@@ -285,3 +285,167 @@ test('records completed hot and time stream observations', () => {
   assert.equal(state.streams.time.unique_reply_count, 0);
   assert.deepEqual(state.partial_reasons, ['missing_identity_evidence']);
 });
+
+const weiboSortProfile = {
+  sortScopeSelector: '[data-comment-sort]',
+  sorts: {
+    hot: { label: '按热度', selectedAttribute: 'aria-selected', selectedValue: 'true' },
+    time: { label: '按时间', selectedAttribute: 'aria-selected', selectedValue: 'true' }
+  }
+};
+
+function createWeiboSortTab(scope, outsideControl) {
+  return {
+    playwright: {
+      locator(selector) {
+        assert.equal(selector, weiboSortProfile.sortScopeSelector);
+        return scope;
+      },
+      getByText() {
+        outsideControl?.queried();
+        throw new Error('sort controls must never be queried page-wide');
+      }
+    }
+  };
+}
+
+test('rejects unsupported Weibo sort modes before querying Chrome', async () => {
+  const tab = {
+    playwright: {
+      locator() {
+        throw new Error('unsupported mode must not inspect a scope');
+      }
+    }
+  };
+
+  await assert.rejects(
+    capture.switchWeiboCommentSort(tab, weiboSortProfile, 'unknown'),
+    /Unsupported Weibo sort mode: unknown/
+  );
+});
+
+test('rejects an incomplete Weibo sort profile before querying Chrome', async () => {
+  const profile = structuredClone(weiboSortProfile);
+  profile.sorts.time = {};
+  let locatorCalled = false;
+  const tab = {
+    playwright: {
+      locator() {
+        locatorCalled = true;
+        throw new Error('invalid sort profile must not inspect a scope');
+      }
+    }
+  };
+
+  await assert.rejects(
+    capture.switchWeiboCommentSort(tab, profile, 'time'),
+    /Invalid Weibo time sort profile/
+  );
+  assert.equal(locatorCalled, false);
+});
+
+test('switches an exact scoped Weibo sort control and verifies its selected state', async () => {
+  const clickLog = [];
+  let selected = 'false';
+  const control = {
+    async count() { return 1; },
+    async isVisible() { return true; },
+    async isDisabled() { return false; },
+    async innerText() { return '按时间'; },
+    async click() {
+      clickLog.push('按时间');
+      selected = 'true';
+    },
+    async getAttribute(name) {
+      assert.equal(name, 'aria-selected');
+      return selected;
+    }
+  };
+  const scope = {
+    async count() { return 1; },
+    getByText(label, options) {
+      assert.equal(label, '按时间');
+      assert.deepEqual(options, { exact: true });
+      return control;
+    }
+  };
+
+  const result = await capture.switchWeiboCommentSort(
+    createWeiboSortTab(scope),
+    weiboSortProfile,
+    'time'
+  );
+
+  assert.deepEqual(result, {
+    mode: 'time', label: '按时间', matched: 1, clicked: 1, verified: true
+  });
+  assert.deepEqual(clickLog, ['按时间']);
+});
+
+test('never queries a matching Weibo sort control outside the unique sort scope', async () => {
+  let outsideQueried = false;
+  const scope = {
+    async count() { return 1; },
+    getByText(label, options) {
+      assert.equal(label, '按时间');
+      assert.deepEqual(options, { exact: true });
+      return {
+        async count() { return 0; }
+      };
+    }
+  };
+
+  await assert.rejects(
+    capture.switchWeiboCommentSort(
+      createWeiboSortTab(scope, { queried() { outsideQueried = true; } }),
+      weiboSortProfile,
+      'time'
+    ),
+    /Expected one time sort control/
+  );
+  assert.equal(outsideQueried, false);
+});
+
+test('rejects a Weibo sort control whose label changes immediately before click', async () => {
+  let clickCount = 0;
+  const control = {
+    async count() { return 1; },
+    async isVisible() { return true; },
+    async isDisabled() { return false; },
+    async innerText() { return '按热度'; },
+    async click() { clickCount += 1; }
+  };
+  const scope = {
+    async count() { return 1; },
+    getByText() { return control; }
+  };
+
+  await assert.rejects(
+    capture.switchWeiboCommentSort(createWeiboSortTab(scope), weiboSortProfile, 'time'),
+    /Weibo sort label changed/
+  );
+  assert.equal(clickCount, 0);
+});
+
+test('reports an unverified Weibo sort when the selected attribute does not match', async () => {
+  const control = {
+    async count() { return 1; },
+    async isVisible() { return true; },
+    async isDisabled() { return false; },
+    async innerText() { return '按热度'; },
+    async click() {},
+    async getAttribute() { return 'false'; }
+  };
+  const scope = {
+    async count() { return 1; },
+    getByText() { return control; }
+  };
+
+  const result = await capture.switchWeiboCommentSort(
+    createWeiboSortTab(scope),
+    weiboSortProfile,
+    'hot'
+  );
+
+  assert.equal(result.verified, false);
+});

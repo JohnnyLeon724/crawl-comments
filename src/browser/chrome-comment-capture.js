@@ -322,6 +322,44 @@ async function expandExactLabel(tabOrRoot, rootSelectorOrLabel, labelMaybe) {
   return { label: normalizeControlText(label), matched: count, clicked };
 }
 
+async function switchWeiboCommentSort(tab, profile, mode) {
+  if (!CAPTURE_SORT_MODES.has(mode)) {
+    throw new Error(`Unsupported Weibo sort mode: ${mode}`);
+  }
+
+  const spec = profile?.sorts?.[mode];
+  const label = normalizeControlText(spec?.label);
+  const selectedAttribute = normalizeControlText(spec?.selectedAttribute);
+  const selectedValue = normalizeControlText(spec?.selectedValue);
+  if (!label || !selectedAttribute || !selectedValue) {
+    throw new Error(`Invalid Weibo ${mode} sort profile`);
+  }
+
+  const scope = await requireUniqueRoot(tab, profile?.sortScopeSelector);
+  const control = scope.getByText(label, { exact: true });
+  const matched = await control.count();
+
+  if (matched !== 1) {
+    throw new Error(`Expected one ${mode} sort control`);
+  }
+  if (!await controlCanBeClicked(control)) {
+    throw new Error(`Weibo ${mode} sort control is not clickable`);
+  }
+  if (normalizeControlText(await control.innerText()) !== label) {
+    throw new Error('Weibo sort label changed');
+  }
+
+  await control.click();
+  const selected = await control.getAttribute(selectedAttribute);
+  return {
+    mode,
+    label,
+    matched,
+    clicked: 1,
+    verified: selected === selectedValue
+  };
+}
+
 function inspectCommentRoot(root, profile) {
   const config = {
     commentItemSelector: profile.commentItemSelector,
@@ -611,6 +649,7 @@ module.exports = {
   buildCaptureState,
   buildCommentDomBatch,
   expandExactLabel,
+  switchWeiboCommentSort,
   expandVisibleReplies,
   inspectCommentRoot,
   captureScopedRecords,
