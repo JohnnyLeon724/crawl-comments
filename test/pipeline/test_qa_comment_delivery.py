@@ -135,6 +135,7 @@ class QaCommentDeliveryTest(unittest.TestCase):
                     {
                         "schema_version": "comment-dom-batch-v1",
                         "batch_id": "batch_0001",
+                        "batch_kind": "model",
                         "state": {"new_candidate_count": 1, "has_more": True},
                         "candidates": [{"candidate_id": "candidate_000001"}],
                     },
@@ -150,6 +151,7 @@ class QaCommentDeliveryTest(unittest.TestCase):
                     {
                         "schema_version": "comment-dom-batch-v1",
                         "batch_id": "batch_0002",
+                        "batch_kind": "model",
                         "state": {"new_candidate_count": 0, "has_more": False},
                         "candidates": [],
                     },
@@ -167,6 +169,124 @@ class QaCommentDeliveryTest(unittest.TestCase):
             self.assertEqual(task["missing_ai_extraction_batch_count"], 1)
             self.assertEqual(task["truncated_batch_count"], 1)
             self.assertEqual(summary["total_batch_count"], 2)
+
+    def test_requires_ai_artifacts_only_for_model_batches_but_keeps_capture_truncation(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            (project_dir / "crawl-tasks.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "task_id": "task_0001",
+                                "phase": "KOL",
+                                "platform": "weibo",
+                                "expected_comment_count": 1,
+                            },
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (project_dir / "all-normalized-comments.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task_0001",
+                        "row_type": "level1",
+                        "user_name": "用户A",
+                        "text": "评论",
+                        "created_at": "3月前",
+                        "ip_location": "江苏",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            batch_root = project_dir / "runs" / "task_0001" / "batches"
+            for batch_id, batch_kind, has_more in [
+                ("capture_hot_001", "capture", True),
+                ("model_001", "model", False),
+            ]:
+                batch_dir = batch_root / batch_id
+                batch_dir.mkdir(parents=True)
+                (batch_dir / "comment-dom-batch.json").write_text(
+                    json.dumps(
+                        {
+                            "schema_version": "comment-dom-batch-v1",
+                            "batch_id": batch_id,
+                            "batch_kind": batch_kind,
+                            "state": {"new_candidate_count": 1, "has_more": has_more},
+                            "candidates": [{"candidate_id": batch_id}],
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+
+            task = build_qa_summary(project_dir)["tasks"][0]
+
+            self.assertEqual(task["missing_ai_extraction_batch_count"], 1)
+            self.assertEqual(task["truncated_batch_count"], 1)
+            self.assertIn("missing_ai_extraction_batch", task["issues"])
+            self.assertIn("truncated_batch", task["issues"])
+
+    def test_treats_legacy_batches_without_batch_kind_as_model_batches(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_dir = Path(tmpdir)
+            (project_dir / "crawl-tasks.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "task_id": "task_0001",
+                                "phase": "KOL",
+                                "platform": "douyin",
+                                "expected_comment_count": 1,
+                            },
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (project_dir / "all-normalized-comments.jsonl").write_text(
+                json.dumps(
+                    {
+                        "task_id": "task_0001",
+                        "row_type": "level1",
+                        "user_name": "用户A",
+                        "text": "评论",
+                        "created_at": "3月前",
+                        "ip_location": "江苏",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            batch_dir = project_dir / "runs" / "task_0001" / "batches" / "batch_0001"
+            batch_dir.mkdir(parents=True)
+            (batch_dir / "comment-dom-batch.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "comment-dom-batch-v1",
+                        "batch_id": "batch_0001",
+                        "state": {"new_candidate_count": 1, "has_more": False},
+                        "candidates": [{"candidate_id": "candidate_000001"}],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            task = build_qa_summary(project_dir)["tasks"][0]
+
+            self.assertEqual(task["missing_ai_extraction_batch_count"], 1)
+            self.assertIn("missing_ai_extraction_batch", task["issues"])
 
     def test_reports_rendered_count_gap_without_turning_a_passing_task_partial(self):
         with tempfile.TemporaryDirectory() as tmpdir:

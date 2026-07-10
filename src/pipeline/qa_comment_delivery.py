@@ -128,7 +128,7 @@ def read_task_batch_metrics(project_dir: Path, task_id: str) -> dict[str, int]:
 
         if int(new_candidate_count or 0) == 0:
             empty_batch_count += 1
-        if not (batch_dir / "ai-comment-extraction.json").exists():
+        if batch.get("batch_kind", "model") == "model" and not (batch_dir / "ai-comment-extraction.json").exists():
             missing_ai_extraction_batch_count += 1
         if state.get("has_more") or state.get("stop_reason") == "max_candidates":
             truncated_batch_count += 1

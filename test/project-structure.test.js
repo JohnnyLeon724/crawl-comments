@@ -27,6 +27,7 @@ test('core crawler modules are grouped under src with legacy wrappers', () => {
     ['src/normalize/build-comment-excel-report.js', 'script/build-comment-excel-report.js', '../src/normalize/build-comment-excel-report.js'],
     ['src/normalize/build-comment-qa-sample.js', 'script/build-comment-qa-sample.js', '../src/normalize/build-comment-qa-sample.js'],
     ['src/normalize/prepare-comment-ai-review.js', 'script/prepare-comment-ai-review.js', '../src/normalize/prepare-comment-ai-review.js'],
+    ['src/normalize/prepare-comment-extraction-batches.js', 'script/prepare-comment-extraction-batches.js', '../src/normalize/prepare-comment-extraction-batches.js'],
     ['src/normalize/run-comment-ai-review.js', 'script/run-comment-ai-review.js', '../src/normalize/run-comment-ai-review.js'],
     ['src/adapters/douyin.js', 'adapters/douyin.js', '../src/adapters/douyin.js'],
     ['src/adapters/xiaohongshu.js', 'adapters/xiaohongshu.js', '../src/adapters/xiaohongshu.js']
